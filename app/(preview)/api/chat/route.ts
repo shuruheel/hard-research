@@ -1,19 +1,19 @@
 import { getOrders, getTrackingInformation, ORDERS } from "@/components/data";
 import { openai } from "@ai-sdk/openai";
-import { convertToCoreMessages, streamText } from "ai";
+import { streamText } from "ai";
 import { z } from "zod";
 
 export async function POST(request: Request) {
   const { messages } = await request.json();
 
-  const stream = await streamText({
+  const stream = streamText({
     model: openai("gpt-4o"),
     system: `\
       - you are a friendly package tracking assistant
       - your responses are concise
       - you do not ever use lists, tables, or bullet points; instead, you provide a single response
     `,
-    messages: convertToCoreMessages(messages),
+    messages,
     maxSteps: 5,
     tools: {
       listOrders: {
