@@ -165,8 +165,11 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    return new Response('An error occurred while processing your request!', {
-      status: 404,
+    console.error("Error in POST /api/chat:", error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return new Response(JSON.stringify({ error: `An error occurred while processing your request: ${errorMessage}` }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 }
