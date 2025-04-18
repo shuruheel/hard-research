@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getNeo4jDriver, neo4j } from '../../neo4j/driver';
+import { Session } from 'neo4j-driver';
 import OpenAI from 'openai';
 import { 
   ExtractedNode, 
@@ -281,7 +282,7 @@ function mergeWithReasoningChains(
 
 // Save extracted nodes to Neo4j
 async function saveNodesToNeo4j(
-  session: neo4j.Session, 
+  session: Session, 
   extractedData: { nodes: ExtractedNode[], relationships: ExtractedRelationship[] }
 ): Promise<Record<string, number>> {
   const { nodes, relationships } = extractedData;

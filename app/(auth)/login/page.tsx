@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useActionState, useEffect, useState } from 'react';
+import { useState, useTransition } from 'react';
 import { toast } from '@/components/toast';
 
 import { AuthForm } from '@/components/auth-form';
@@ -14,35 +14,29 @@ export default function Page() {
   const router = useRouter();
 
   const [email, setEmail] = useState('');
-  const [isSuccessful, setIsSuccessful] = useState(false);
-
-  const [state, formAction] = useActionState<LoginActionState, FormData>(
-    login,
-    {
-      status: 'idle',
-    },
-  );
-
-  useEffect(() => {
-    if (state.status === 'failed') {
-      toast({
-        type: 'error',
-        description: 'Invalid credentials!',
-      });
-    } else if (state.status === 'invalid_data') {
-      toast({
-        type: 'error',
-        description: 'Failed validating your submission!',
-      });
-    } else if (state.status === 'success') {
-      setIsSuccessful(true);
-      router.refresh();
-    }
-  }, [state.status, router]);
+  const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (formData: FormData) => {
     setEmail(formData.get('email') as string);
-    formAction(formData);
+
+    startTransition(async () => {
+      const initialLoginState: LoginActionState = { status: 'idle' };
+      const result = await login(initialLoginState, formData);
+
+      if (result.status === 'failed') {
+        toast({
+          type: 'error',
+          description: 'Invalid credentials!',
+        });
+      } else if (result.status === 'invalid_data') {
+        toast({
+          type: 'error',
+          description: 'Failed validating your submission!',
+        });
+      } else if (result.status === 'success') {
+        router.refresh();
+      }
+    });
   };
 
   return (
@@ -55,7 +49,7 @@ export default function Page() {
           </p>
         </div>
         <AuthForm action={handleSubmit} defaultEmail={email}>
-          <SubmitButton isSuccessful={isSuccessful}>Sign in</SubmitButton>
+          <SubmitButton isPending={isPending}>Sign in</SubmitButton>
           <p className="text-center text-sm text-gray-600 mt-4 dark:text-zinc-400">
             {"Don't have an account? "}
             <Link

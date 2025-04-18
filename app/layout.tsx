@@ -1,6 +1,6 @@
 import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import { ThemeProvider } from '@/components/theme-provider';
 
 import './globals.css';
@@ -15,15 +15,13 @@ export const viewport = {
   maximumScale: 1, // Disable auto-zoom on mobile Safari
 };
 
-const geist = Geist({
-  subsets: ['latin'],
-  display: 'swap',
+const geist = localFont({
+  src: '../public/fonts/Geist-Variable.woff2',
   variable: '--font-geist',
 });
 
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  display: 'swap',
+const geistMono = localFont({
+  src: '../public/fonts/GeistMono-Variable.woff2',
   variable: '--font-geist-mono',
 });
 
