@@ -41,30 +41,29 @@ export const semanticRetrieval = {
       const queryEmbedding = await getEmbeddingForText(queryText);
       
       // 2. Build query for each node type and union results
-      const nodeQueries = nodeTypes
-        .filter(nodeType => NODE_TYPE_TO_INDEX[nodeType]) // Only include node types with defined indexes
-        .map(nodeType => {
-          const indexName = NODE_TYPE_TO_INDEX[nodeType];
-          
-          return `
-            CALL {
-              CALL db.index.vector.queryNodes("${indexName}", $limit, $embedding)
-              YIELD node, score
-              RETURN node, score, "${nodeType}" AS nodeType
-            }
-          `;
-        });
+      const validNodeTypes = nodeTypes.filter(nodeType => NODE_TYPE_TO_INDEX[nodeType]);
       
-      if (nodeQueries.length === 0) {
+      if (validNodeTypes.length === 0) {
         throw new Error("No valid node types specified for semantic search");
       }
+      
+      // Build the query with proper UNION structure
+      const nodeQueries = validNodeTypes.map(nodeType => {
+        const indexName = NODE_TYPE_TO_INDEX[nodeType];
+        
+        return `
+          CALL db.index.vector.queryNodes("${indexName}", $limit, $embedding)
+          YIELD node, score
+          RETURN node, score, "${nodeType}" AS nodeType
+        `;
+      });
       
       // 3. Execute combined query with UNION ALL
       const query = nodeQueries.join("\nUNION ALL\n") + "\nORDER BY score DESC LIMIT $finalLimit";
       
       const result = await session.run(query, {
         embedding: queryEmbedding,
-        limit: neo4j.int(Math.ceil(limit / nodeTypes.length)), // Split limit across types
+        limit: neo4j.int(Math.ceil(limit / validNodeTypes.length)), // Split limit across types
         finalLimit: neo4j.int(limit) // Final limit after union
       });
       
