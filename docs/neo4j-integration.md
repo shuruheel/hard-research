@@ -1,97 +1,116 @@
-# Neo4j Knowledge Graph Integration
+# Neo4j Integration
 
-This document provides an overview of the Neo4j knowledge graph integration implemented for the AI chatbot application. The integration allows for semantic retrieval of nodes from the knowledge graph and automatic extraction of entities and concepts from conversations.
+This document provides information on how to use the Neo4j integration in this project.
 
-## Core Components
+## Setup
 
-1. **Neo4j Driver**: Singleton pattern implementation for managing database connections
-2. **Semantic Retrieval Tool**: A tool that uses vector-based embeddings to find relevant information in the graph
-3. **Graph Node Extraction Tool**: A tool that analyzes conversations and extracts knowledge graph nodes
-4. **Schema Initialization Script**: A utility for setting up constraints and indexes in Neo4j
+### Environment Variables
 
-## Setup Instructions
+Add the following environment variables to your `.env.local` file:
 
-### Prerequisites
+```
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=your-password
+```
 
-- Neo4j Database (v4.4+ recommended)
-- Neo4j Vector Index Support (for semantic search)
-- OpenAI API Key (for embeddings generation)
+### Initialize Schema
 
-### Configuration
+Before using the Neo4j tools, you need to initialize the graph schema with necessary constraints and indexes:
 
-1. Copy the environment variables to your `.env.local` file:
-   ```
-   NEO4J_URI=bolt://localhost:7687
-   NEO4J_USERNAME=neo4j
-   NEO4J_PASSWORD=your-password
-   OPENAI_API_KEY=your-api-key
-   ```
+```bash
+npm run neo4j:init
+# or
+pnpm neo4j:init
+```
 
-2. Initialize the database schema:
-   ```bash
-   npm run neo4j:init
-   ```
-   This will create necessary constraints and indexes in the Neo4j database.
+This script creates:
+- Unique constraints for node IDs across all node types
+- Vector indexes for semantic search (with dimensions=3072 for OpenAI embeddings)
+- Text indexes for name properties to speed up lookups
 
-## Data Schema
-
-The knowledge graph uses the following node types:
-
-- **Entity**: Physical objects, people, locations (`Entity`, `Person` subtypes)
-- **Concept**: Abstract ideas and categories
-- **Thought**: Subjective interpretations or analyses
-- **ReasoningChain**: Sequences of logical reasoning
-- **ReasoningStep**: Individual steps in a reasoning chain
-
-Relationships include:
-- `RELATED_TO`: General relationship between nodes
-- `HAS_CONCEPT`: Links entities to concepts
-- `HAS_PART`: Hierarchical relationship (e.g., chain to steps)
-- `REFERS_TO`: Reference relationship
-- `CONTRADICTS`: Contradiction relationship
-- `SUPPORTS`: Support or evidence relationship
-- `PRECEDES`: Sequential relationship
-
-## Usage Examples
+## Available Tools
 
 ### Semantic Retrieval
 
-The `semanticRetrieval` tool allows finding semantically relevant nodes from the knowledge graph:
+The `semanticRetrieval` tool allows you to find semantically relevant nodes in the knowledge graph based on a text query.
 
-```javascript
-// Example API call
-const results = await semanticRetrieval({
-  queryText: "climate change impact on agriculture",
-  nodeTypes: ["Concept", "Thought"],
+Example:
+```typescript
+const results = await semanticRetrieval.execute({
+  queryText: "What are the ethical implications of artificial intelligence?",
+  nodeTypes: ["Thought", "Concept", "Person"],
   limit: 5
 });
 ```
 
 ### Graph Node Extraction
 
-The `extractGraphNodes` tool can analyze conversations and extract knowledge graph elements:
+The `extractGraphNodes` tool extracts knowledge graph nodes from conversation messages, including reasoning tokens.
 
-```javascript
-// Example API call
-const extraction = await extractGraphNodes({
-  messages: conversationMessages,
-  extractionDepth: "standard"
+Example:
+```typescript
+const extraction = await extractGraphNodes.execute({
+  messages: conversation.messages,
+  extractionDepth: "standard" // "minimal", "standard", or "deep"
 });
 ```
 
-## Tooling Overview
+## Type Definitions
 
-1. **semanticRetrieval.ts**: Semantic search across node types using vectors
-2. **extractGraphNodes.ts**: Knowledge graph population from conversational data
-3. **driver.ts**: Neo4j connection management
-4. **serializer.ts**: Data serialization utilities
-5. **types.ts**: TypeScript interfaces for nodes and relations
-6. **cypher-builder.ts**: Helper functions for building Cypher queries
-7. **embeddings.ts**: OpenAI embedding generation and caching
+The Neo4j integration includes TypeScript type definitions for all node types and relationships:
 
-## Next Steps and Future Improvements
+- `Entity`, `Person`, `Concept`, `Thought`, `ReasoningChain`, `ReasoningStep`, etc.
+- Relationship types like `RELATED_TO`, `HAS_CONCEPT`, `REFERS_TO`, etc.
 
-1. **Advanced Graph Analysis Tools**: Network analysis tools for centrality, community detection
-2. **UI Visualization Components**: Interactive graph visualization components
-3. **Improved Schema**: Enhanced schema with additional node types and relationships
-4. **Bidirectional Integration**: Better integration between knowledge graph and reasoning process 
+## Neo4j Connection
+
+The Neo4j driver is implemented as a singleton for efficient connection management:
+
+```typescript
+import { getNeo4jDriver } from '@/lib/neo4j/driver';
+
+// Get a session
+const session = getNeo4jDriver().session();
+
+try {
+  // Use the session...
+} finally {
+  // Always close the session
+  await session.close();
+}
+```
+
+## Serialization
+
+The integration includes utilities for serializing Neo4j objects to JSON-compatible formats:
+
+```typescript
+import { serializeNeo4j } from '@/lib/neo4j/serializer';
+
+// Serialize a Neo4j result
+const serialized = serializeNeo4j(result);
+```
+
+## Cypher Query Building
+
+The `cypher-builder.ts` utilities help construct Cypher queries with proper parameterization:
+
+```typescript
+import { matchNode, buildQuery, paginate } from '@/lib/neo4j/cypher-builder';
+
+const query = buildQuery([
+  matchNode('Person', { name: 'John' }, 'p'),
+  'RETURN p',
+  paginate(0, 10)
+]);
+```
+
+## Troubleshooting
+
+If you encounter connection issues:
+
+1. Verify your Neo4j instance is running
+2. Check your environment variables
+3. Ensure you have the proper access permissions
+4. Check that vector indexes are properly created with the correct dimensions (3072) 

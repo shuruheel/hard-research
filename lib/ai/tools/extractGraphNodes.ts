@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getNeo4jDriver, neo4j } from '../../neo4j/driver';
+import OpenAI from 'openai';
 import { 
   ExtractedNode, 
   ExtractedRelationship, 
@@ -11,7 +12,12 @@ import {
 import { nanoid } from 'nanoid';
 
 // Model (using the model from existing implementations)
-import { myProvider } from '../providers';
+// import { myProvider } from '../providers';
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export const extractGraphNodes = {
   description: "Extract knowledge graph nodes from conversation messages and reasoning tokens",
@@ -155,13 +161,15 @@ async function extractNodesWithLLM(
   `;
   
   // Use an LLM to analyze the text
-  const model = myProvider.languageModel('gpt-4o');
-  const response = await model.invoke([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: conversationText }
-  ]);
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: conversationText }
+    ]
+  });
   
-  const content = response.content.toString();
+  const content = response.choices[0].message.content || '';
   
   // Extract JSON from response
   const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || 
