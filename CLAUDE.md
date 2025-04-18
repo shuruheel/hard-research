@@ -50,6 +50,14 @@ This project is a research assistant application that integrates Neo4j graph dat
 - Handle Neo4j-specific types properly (Integer, DateTime)
 - Implement proper error handling with type guards
 - Follow the graph schema defined in `docs/graph-schema.md`
+- Use the following vector indexes for semantic search:
+  - 'Concept': 'concept-embeddings'
+  - 'Entity': 'entity-embeddings'
+  - 'Person': 'person-embeddings'
+  - 'Proposition': 'proposition-embeddings'
+  - 'ReasoningChain': 'reasoningchain-embeddings'
+  - 'Thought': 'thought-embeddings'
+- All embeddings use OpenAI's `text-embedding-3-large` model with 3072 dimensions
 
 ## AI SDK 4.2 Integration Guidelines
 - Use OpenAI Responses API for web search capabilities

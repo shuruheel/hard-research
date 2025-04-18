@@ -1,0 +1,395 @@
+---
+description: React Component Patterns for Neo4j Graph Visualization
+globs: "components/**/*.tsx"
+---
+
+# React Component Guidelines
+
+## Message Component Pattern
+
+Extend the existing message component to handle graph data:
+
+```tsx
+// Example of handling graph data in message parts
+if (type === 'graph-data') {
+  return (
+    <div key={key} className="graph-visualization">
+      <GraphVisualization 
+        nodes={part.graphData.nodes} 
+        relationships={part.graphData.relationships} 
+      />
+    </div>
+  );
+}
+```
+
+## Graph Visualization Components
+
+Follow these patterns for graph visualization components:
+
+```tsx
+// components/graph-visualization/force-graph.tsx
+'use client';
+
+import { useEffect, useRef } from 'react';
+import ForceGraph2D from 'react-force-graph-2d';
+import { useResizeObserver } from 'usehooks-ts';
+
+interface Node {
+  id: string;
+  name: string;
+  type: string;
+  // Other node properties
+}
+
+interface Link {
+  source: string;
+  target: string;
+  type: string;
+  // Other relationship properties
+}
+
+interface ForceGraphProps {
+  nodes: Node[];
+  links: Link[];
+  onNodeClick?: (node: Node) => void;
+  onLinkClick?: (link: Link) => void;
+}
+
+export function ForceGraph({ nodes, links, onNodeClick, onLinkClick }: ForceGraphProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { width, height } = useResizeObserver({ ref: containerRef });
+
+  // Transform data for force graph
+  const graphData = {
+    nodes: nodes.map(node => ({
+      ...node,
+      val: 1, // Size factor
+      color: getNodeColor(node.type), // Color by node type
+    })),
+    links: links.map(link => ({
+      ...link,
+      source: link.source,
+      target: link.target,
+    })),
+  };
+
+  // Get color based on node type
+  function getNodeColor(type: string): string {
+    switch (type) {
+      case 'Person': return '#ff6b6b';
+      case 'Concept': return '#4ecdc4';
+      case 'Thought': return '#ffe66d';
+      case 'ReasoningChain': return '#6b5b95';
+      default: return '#999999';
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="w-full h-[500px]">
+      {width && height && (
+        <ForceGraph2D
+          width={width}
+          height={height}
+          graphData={graphData}
+          nodeLabel="name"
+          linkLabel={link => link.type}
+          onNodeClick={node => onNodeClick?.(node as Node)}
+          onLinkClick={link => onLinkClick?.(link as Link)}
+          linkDirectionalArrowLength={3.5}
+          linkDirectionalArrowRelPos={1}
+          linkWidth={1}
+          nodeRelSize={5}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+## Reasoning Visualization Components
+
+Follow these patterns for reasoning chain visualization:
+
+```tsx
+// components/reasoning-visualization/reasoning-flowchart.tsx
+'use client';
+
+import { useState } from 'react';
+import ReactFlow, { 
+  Controls, 
+  Background, 
+  Node, 
+  Edge, 
+  Position,
+  MarkerType
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
+interface ReasoningStep {
+  id: string;
+  content: string;
+  stepType: string;
+}
+
+interface ReasoningChainProps {
+  chain: {
+    id: string;
+    name: string;
+    description: string;
+  };
+  steps: ReasoningStep[];
+}
+
+export function ReasoningFlowchart({ chain, steps }: ReasoningChainProps) {
+  // Transform steps into nodes and edges
+  const nodes: Node[] = steps.map((step, index) => ({
+    id: step.id,
+    data: { 
+      label: (
+        <div className="max-w-sm p-2">
+          <div className="font-medium">{`Step ${index + 1}: ${step.stepType}`}</div>
+          <div className="text-sm">{step.content}</div>
+        </div>
+      )
+    },
+    position: { x: 250, y: index * 150 },
+    type: 'default',
+    style: {
+      width: 300,
+      borderRadius: '8px',
+      border: '1px solid #ccc',
+    },
+  }));
+  
+  // Create edges connecting the steps
+  const edges: Edge[] = steps.slice(0, -1).map((step, index) => ({
+    id: `e-${step.id}-${steps[index + 1].id}`,
+    source: step.id,
+    target: steps[index + 1].id,
+    type: 'smoothstep',
+    animated: true,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+    },
+  }));
+
+  return (
+    <div className="h-[600px] w-full border rounded-lg">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        fitView
+      >
+        <Controls />
+        <Background />
+      </ReactFlow>
+    </div>
+  );
+}
+```
+
+## Semantic Similarity Visualization
+
+Use this pattern for visualizing semantic similarity:
+
+```tsx
+// components/semantic-visualization/similarity-network.tsx
+'use client';
+
+import { useEffect, useRef } from 'react';
+import * as d3 from 'd3';
+
+interface SimilarityNode {
+  id: string;
+  name: string;
+  type: string;
+  similarityScore?: number;
+}
+
+interface SimilarityLink {
+  source: string;
+  target: string;
+  score: number;
+}
+
+interface SimilarityNetworkProps {
+  centralNode: SimilarityNode;
+  similarNodes: SimilarityNode[];
+  threshold?: number; // Minimum similarity score to show (0-1)
+}
+
+export function SimilarityNetwork({ 
+  centralNode, 
+  similarNodes, 
+  threshold = 0.5 
+}: SimilarityNetworkProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  
+  useEffect(() => {
+    if (!svgRef.current) return;
+    
+    // Filter similar nodes by threshold
+    const filteredNodes = similarNodes.filter(node => 
+      (node.similarityScore || 0) >= threshold
+    );
+    
+    // Create links from central node to similar nodes
+    const links: SimilarityLink[] = filteredNodes.map(node => ({
+      source: centralNode.id,
+      target: node.id,
+      score: node.similarityScore || 0
+    }));
+    
+    // All nodes including central node
+    const nodes = [centralNode, ...filteredNodes];
+    
+    // D3 visualization setup
+    const width = svgRef.current.clientWidth;
+    const height = svgRef.current.clientHeight;
+    
+    // Clear previous visualization
+    d3.select(svgRef.current).selectAll("*").remove();
+    
+    // Create svg container
+    const svg = d3.select(svgRef.current)
+      .attr("width", width)
+      .attr("height", height);
+      
+    // Create simulation
+    const simulation = d3.forceSimulation(nodes as any)
+      .force("link", d3.forceLink(links).id((d: any) => d.id).distance(100))
+      .force("charge", d3.forceManyBody().strength(-200))
+      .force("center", d3.forceCenter(width / 2, height / 2));
+    
+    // Draw links
+    const link = svg.append("g")
+      .selectAll("line")
+      .data(links)
+      .enter().append("line")
+      .attr("stroke-width", d => d.score * 3)
+      .attr("stroke", "#999")
+      .attr("stroke-opacity", 0.6)
+      .attr("stroke-dasharray", "5,5");
+    
+    // Draw nodes
+    const node = svg.append("g")
+      .selectAll("circle")
+      .data(nodes)
+      .enter().append("circle")
+      .attr("r", (d) => d.id === centralNode.id ? 10 : 7)
+      .attr("fill", (d) => getNodeColor(d.type))
+      .call(drag(simulation) as any);
+    
+    // Add labels
+    const label = svg.append("g")
+      .selectAll("text")
+      .data(nodes)
+      .enter().append("text")
+      .text(d => d.name)
+      .attr("font-size", 10)
+      .attr("dx", 12)
+      .attr("dy", 4);
+    
+    // Update positions during simulation
+    simulation.on("tick", () => {
+      link
+        .attr("x1", (d: any) => d.source.x)
+        .attr("y1", (d: any) => d.source.y)
+        .attr("x2", (d: any) => d.target.x)
+        .attr("y2", (d: any) => d.target.y);
+      
+      node
+        .attr("cx", (d: any) => d.x)
+        .attr("cy", (d: any) => d.y);
+      
+      label
+        .attr("x", (d: any) => d.x)
+        .attr("y", (d: any) => d.y);
+    });
+    
+    // Dragging function
+    function drag(simulation: any) {
+      function dragstarted(event: any) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+      }
+      
+      function dragged(event: any) {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+      }
+      
+      function dragended(event: any) {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+      }
+      
+      return d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended);
+    }
+    
+    // Color mapping function
+    function getNodeColor(type: string): string {
+      switch (type) {
+        case 'Person': return '#ff6b6b';
+        case 'Concept': return '#4ecdc4';
+        case 'Thought': return '#ffe66d';
+        case 'ReasoningChain': return '#6b5b95';
+        default: return '#999999';
+      }
+    }
+    
+    // Cleanup
+    return () => {
+      simulation.stop();
+    };
+  }, [centralNode, similarNodes, threshold]);
+  
+  return (
+    <div className="w-full h-[500px] border rounded-lg overflow-hidden">
+      <svg ref={svgRef} className="w-full h-full"></svg>
+    </div>
+  );
+}
+```
+
+## State Management Pattern
+
+Use React Context for managing shared graph visualization state:
+
+```tsx
+// Create a context for graph visualization state
+export const GraphContext = createContext<{
+  selectedNode: Node | null;
+  setSelectedNode: (node: Node | null) => void;
+  highlightedNodes: Set<string>;
+  setHighlightedNodes: (nodeIds: Set<string>) => void;
+}>({
+  selectedNode: null,
+  setSelectedNode: () => {},
+  highlightedNodes: new Set(),
+  setHighlightedNodes: () => {},
+});
+
+// Use a provider to share state across components
+export function GraphProvider({ children }: { children: React.ReactNode }) {
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
+  
+  return (
+    <GraphContext.Provider value={{
+      selectedNode,
+      setSelectedNode,
+      highlightedNodes,
+      setHighlightedNodes,
+    }}>
+      {children}
+    </GraphContext.Provider>
+  );
+}
+```

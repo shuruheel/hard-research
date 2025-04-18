@@ -1,0 +1,42 @@
+---
+description: Core Architecture and Project Structure
+alwaysApply: true
+---
+
+# Core Architecture Guidelines
+
+This project integrates Neo4j knowledge graph capabilities with the Vercel AI SDK 4.2 to create a research assistant application with the following key features:
+
+1. Neo4j semantic graph database integration for knowledge storage and retrieval
+2. Vector-based semantic search using OpenAI text-embedding-3-large (3072 dimensions)
+3. AI reasoning capture and storage in graph database
+4. Multi-step tool calling to enable complex research workflows
+
+## Project Structure
+
+- `/app`: Next.js App Router-based routes and API endpoints
+  - `/(chat)/api/chat/route.ts`: Main API endpoint for chat interactions with tool calling
+- `/components`: React components for UI and visualization
+  - Message components handle different content types including reasoning tokens
+- `/lib`: Core utility functions and tool implementations
+  - `/neo4j`: Neo4j driver, serialization, and utilities
+  - `/ai/tools`: AI SDK tools for graph operations
+  - `/agents`: Agent implementations for orchestration
+
+## Core Technologies
+
+- Next.js 14+
+- React 18+
+- Vercel AI SDK 4.2+
+- Neo4j graph database (with vector indexes for semantic search)
+- OpenAI embeddings (text-embedding-3-large, 3072 dimensions)
+- Tailwind CSS for styling
+
+## Development Guidelines
+
+- Use TypeScript throughout with proper type definitions
+- Follow functional component patterns with React hooks
+- Use the singleton pattern for Neo4j driver
+- Implement proper error handling for all database operations
+- Ensure Neo4j session closing in finally blocks
+- Follow the AI SDK tool pattern with Zod schemas for parameters

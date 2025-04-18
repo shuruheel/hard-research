@@ -1,0 +1,249 @@
+---
+description: OpenAI Embeddings and LLM Integration Guidelines
+globs: "lib/ai/**/*.ts"
+---
+
+# OpenAI Integration Guidelines
+
+## Embeddings Integration
+
+Use OpenAI's text-embedding-3-large model (3072 dimensions) for vector embeddings:
+
+```typescript
+// lib/ai/embeddings.ts
+import { OpenAI } from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+// Simple in-memory cache for embeddings
+const embeddingCache = new Map<string, number[]>();
+
+export async function getEmbeddingForText(text: string): Promise<number[]> {
+  // Normalize text for consistent cache keys
+  const normalizedText = text.trim().toLowerCase();
+  
+  // Check cache first
+  if (embeddingCache.has(normalizedText)) {
+    return embeddingCache.get(normalizedText)!;
+  }
+  
+  try {
+    // Get embedding from OpenAI
+    const response = await openai.embeddings.create({
+      model: "text-embedding-3-large",
+      input: normalizedText,
+      dimensions: 3072 // Explicitly specify 3072 dimensions
+    });
+    
+    const embedding = response.data[0].embedding;
+    
+    // Cache the result for future use
+    embeddingCache.set(normalizedText, embedding);
+    
+    // Limit cache size
+    if (embeddingCache.size > 1000) {
+      // Remove oldest entry (first key)
+      const oldestKey = embeddingCache.keys().next().value;
+      embeddingCache.delete(oldestKey);
+    }
+    
+    return embedding;
+  } catch (error) {
+    console.error('Error generating embedding:', error);
+    throw new Error(`Failed to generate embedding: ${error.message}`);
+  }
+}
+```
+
+## LLM Integration for Entity Extraction
+
+Use OpenAI to extract entities and relationships from text:
+
+```typescript
+// lib/ai/entity-extraction.ts
+import { OpenAI } from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+interface ExtractedNode {
+  id: string;
+  type: string;
+  name: string;
+  properties: Record<string, any>;
+}
+
+interface ExtractedRelationship {
+  source: string;
+  target: string;
+  type: string;
+  properties?: Record<string, any>;
+}
+
+interface ExtractionResult {
+  nodes: ExtractedNode[];
+  relationships: ExtractedRelationship[];
+}
+
+export async function extractEntitiesFromText(
+  text: string, 
+  schema: string,
+  extractionDepth: 'minimal' | 'standard' | 'deep' = 'standard'
+): Promise<ExtractionResult> {
+  // Create system prompt with schema information
+  const systemPrompt = `
+  Extract entities and relationships from the text according to this schema:
+  ${schema}
+  
+  For extraction depth=${extractionDepth}, focus on:
+  - minimal: key entities and people only
+  - standard: entities, concepts, and their direct relationships
+  - deep: all node types including abstract concepts, thoughts, and complex relationships
+  
+  Return a valid JSON object with:
+  1. "nodes" array: each with "id", "type", "name", and "properties"
+  2. "relationships" array: each with "source", "target", "type", and optional "properties"
+  
+  Generate unique IDs for each node. Return ONLY the JSON object without any explanation.
+  `;
+
+  try {
+    // Request entity extraction from OpenAI
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text }
+      ],
+      response_format: { type: "json_object" }
+    });
+
+    const content = response.choices[0]?.message?.content || '{"nodes":[],"relationships":[]}';
+    
+    // Parse the JSON response
+    try {
+      const result = JSON.parse(content) as ExtractionResult;
+      
+      // Ensure each node has the required properties
+      result.nodes = result.nodes.map(node => ({
+        id: node.id || `generated-${Math.random().toString(36).substring(2, 9)}`,
+        type: node.type,
+        name: node.name || node.properties?.name || `Unnamed ${node.type}`,
+        properties: node.properties || {}
+      }));
+      
+      // Ensure each relationship references valid nodes
+      const nodeIds = new Set(result.nodes.map(n => n.id));
+      result.relationships = result.relationships.filter(rel => 
+        nodeIds.has(rel.source) && nodeIds.has(rel.target)
+      );
+      
+      return result;
+    } catch (parseError) {
+      console.error('Error parsing LLM response:', parseError);
+      throw new Error('Failed to parse entity extraction result');
+    }
+  } catch (error) {
+    console.error('Entity extraction failed:', error);
+    throw new Error(`Entity extraction failed: ${error.message}`);
+  }
+}
+```
+
+## Reasoning Token Extraction
+
+Extract and structure reasoning tokens from messages:
+
+```typescript
+// lib/ai/reasoning-extraction.ts
+interface ReasoningStep {
+  content: string;
+  index: number;
+}
+
+interface ReasoningChain {
+  messageId: string;
+  reasoning: string;
+  steps: ReasoningStep[];
+}
+
+export function extractReasoningChains(messages: any[]): ReasoningChain[] {
+  const chains: ReasoningChain[] = [];
+  
+  for (const message of messages) {
+    if (!message.parts) continue;
+    
+    const reasoningParts = message.parts.filter((part: any) => 
+      part.type === 'reasoning' && part.reasoning
+    );
+    
+    for (const part of reasoningParts) {
+      chains.push({
+        messageId: message.id,
+        reasoning: part.reasoning,
+        steps: parseReasoningSteps(part.reasoning)
+      });
+    }
+  }
+  
+  return chains;
+}
+
+export function parseReasoningSteps(reasoning: string): ReasoningStep[] {
+  // Strategy 1: Split by numbered steps (e.g., "1.", "2.", etc.)
+  const numberedStepPattern = /^\s*\d+\.\s+/m;
+  if (reasoning.match(numberedStepPattern)) {
+    return reasoning
+      .split(/\n\s*\d+\.\s+/)
+      .filter((step, index) => index > 0 || step.trim().length > 0) // Skip empty first split
+      .map((content, index) => ({ content: content.trim(), index }));
+  }
+  
+  // Strategy 2: Split by paragraphs (double newlines)
+  return reasoning
+    .split(/\n\s*\n/)
+    .filter(step => step.trim().length > 0)
+    .map((content, index) => ({ content: content.trim(), index }));
+}
+```
+
+## API Route Tool Integration
+
+Configure the AI SDK to use OpenAI models with tools:
+
+```typescript
+// app/(chat)/api/chat/route.ts
+import { streamText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { semanticRetrieval, extractGraphNodes } from '@/lib/ai/tools';
+
+export async function POST(request: Request) {
+  const { messages } = await request.json();
+  
+  const stream = streamText({
+    model: openai('gpt-4o'),
+    system: `You are a helpful research assistant with access to a knowledge graph.
+             Use the provided tools to find relevant information.`,
+    messages,
+    maxSteps: 5, // Enable multi-step tool calling
+    experimental_transform: { chunking: 'word' }, // For smooth streaming
+    tools: {
+      semanticRetrieval,
+      extractGraphNodes,
+      // Add other tools as needed
+    },
+    experimental_streamData: true, // Enable data streaming
+    onFinish: async ({ response }) => {
+      // Optionally save the conversation or update the knowledge graph
+    }
+  });
+  
+  // Enable reasoning token capture
+  return stream.toDataStreamResponse({
+    sendReasoning: true, // Send reasoning tokens to the client
+  });
+}
+```

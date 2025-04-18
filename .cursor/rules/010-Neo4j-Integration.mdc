@@ -1,0 +1,169 @@
+---
+description: Neo4j Integration Patterns and Guidelines
+globs: "lib/neo4j/**/*.ts"
+---
+
+# Neo4j Integration Guidelines
+
+## Connection Pattern
+
+Always use the Neo4j driver singleton pattern to manage database connections:
+
+```typescript
+// lib/neo4j/driver.ts
+import neo4j, { Driver } from 'neo4j-driver';
+
+class Neo4jDriverSingleton {
+  private static instance: Driver | null = null;
+  
+  private constructor() {}
+  
+  public static getInstance(): Driver {
+    if (!Neo4jDriverSingleton.instance) {
+      const uri = process.env.NEO4J_URI!;
+      const user = process.env.NEO4J_USERNAME!;
+      const password = process.env.NEO4J_PASSWORD!;
+      
+      Neo4jDriverSingleton.instance = neo4j.driver(
+        uri,
+        neo4j.auth.basic(user, password)
+      );
+    }
+    
+    return Neo4jDriverSingleton.instance;
+  }
+}
+
+export default Neo4jDriverSingleton;
+```
+
+## Type Handling
+
+Always convert Neo4j types to JavaScript native types:
+
+```typescript
+// Neo4j Integer conversion
+if (neo4j.isInt(value)) {
+  return neo4j.integer.inSafeRange(value) ? value.toNumber() : value.toString();
+}
+
+// Neo4j DateTime conversion
+if (value instanceof neo4j.types.DateTime) {
+  return value.toString(); // Or convert to JS Date: new Date(value.toString())
+}
+```
+
+## Session Management
+
+Always use this pattern for session handling:
+
+```typescript
+const session = driver.session({ defaultAccessMode: neo4j.session.READ }); // or WRITE
+try {
+  // Perform database operations
+  const result = await session.run(query, parameters);
+  return processResult(result);
+} catch (error) {
+  console.error("Neo4j operation failed:", error);
+  throw new Error(`Database operation failed: ${error.message}`);
+} finally {
+  await session.close(); // CRITICAL: Always close the session
+}
+```
+
+## Vector Index Usage
+
+Use the following vector indexes for semantic similarity search:
+
+```typescript
+const NODE_TYPE_TO_INDEX = {
+  'Concept': 'concept-embeddings',
+  'Entity': 'entity-embeddings',
+  'Person': 'person-embeddings', 
+  'Proposition': 'proposition-embeddings',
+  'ReasoningChain': 'reasoningchain-embeddings',
+  'Thought': 'thought-embeddings'
+};
+```
+
+All embeddings use OpenAI's text-embedding-3-large model with 3072 dimensions.
+
+## Serialization Helper
+
+Use this helper function to serialize Neo4j records to standard JavaScript objects:
+
+```typescript
+function serializeNeo4jValue(value: any): any {
+  if (value === null || value === undefined) return value;
+  
+  if (neo4j.isInt(value)) {
+    return neo4j.integer.inSafeRange(value) ? value.toNumber() : value.toString();
+  }
+  
+  if (value instanceof neo4j.types.DateTime) {
+    return value.toString();
+  }
+  
+  if (value.labels && value.properties) {
+    return {
+      id: serializeNeo4jValue(value.identity),
+      labels: value.labels,
+      properties: Object.fromEntries(
+        Object.entries(value.properties).map(([k, v]) => 
+          [k, serializeNeo4jValue(v)]
+        )
+      )
+    };
+  }
+  
+  if (Array.isArray(value)) {
+    return value.map(serializeNeo4jValue);
+  }
+  
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, serializeNeo4jValue(v)])
+    );
+  }
+  
+  return value;
+}
+```
+
+## Query Building
+
+Use parameterized queries to prevent injection attacks and improve performance:
+
+```typescript
+// GOOD:
+const query = `
+  MATCH (n:Person {id: $id})
+  RETURN n
+`;
+await session.run(query, { id: personId });
+
+// BAD - NEVER DO THIS:
+const query = `
+  MATCH (n:Person {id: "${personId}"})
+  RETURN n
+`;
+```
+
+## Pagination
+
+Implement pagination using SKIP and LIMIT:
+
+```typescript
+const query = `
+  MATCH (n:${nodeType})
+  RETURN n
+  ORDER BY n.name
+  SKIP $skip
+  LIMIT $limit
+`;
+
+const result = await session.run(query, { 
+  skip: neo4j.int(page * pageSize),
+  limit: neo4j.int(pageSize)
+});
+```

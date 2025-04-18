@@ -1,0 +1,435 @@
+---
+description: Testing Patterns for Neo4j and AI SDK Integration
+globs: "tests/**/*.ts"
+---
+
+# Testing Guidelines
+
+## Unit Testing Neo4j Tools
+
+Use Jest with mocking for Neo4j tool unit tests:
+
+```typescript
+// tests/unit/semantic-retrieval.test.ts
+import { semanticRetrieval } from '../../lib/ai/tools/semanticRetrieval';
+import Neo4jDriverSingleton from '../../lib/neo4j/driver';
+import { getEmbeddingForText } from '../../lib/ai/embeddings';
+
+// Mock external dependencies
+jest.mock('../../lib/neo4j/driver');
+jest.mock('../../lib/ai/embeddings');
+
+describe('Semantic Retrieval Tool', () => {
+  // Mock data
+  const mockEmbedding = Array(3072).fill(0.1);
+  const mockSession = {
+    run: jest.fn(),
+    close: jest.fn().mockResolvedValue(undefined)
+  };
+  const mockDriver = {
+    session: jest.fn().mockReturnValue(mockSession)
+  };
+  
+  // Mock records returned from Neo4j
+  const mockRecords = [
+    {
+      get: jest.fn((key) => {
+        if (key === 'node') {
+          return {
+            properties: {
+              id: 'concept-1',
+              name: 'Quantum Mechanics',
+              definition: 'A fundamental theory in physics'
+            },
+            labels: ['Concept']
+          };
+        } else if (key === 'score') {
+          return 0.95;
+        } else if (key === 'nodeType') {
+          return 'Concept';
+        }
+        return null;
+      })
+    }
+  ];
+  
+  beforeEach(() => {
+    // Reset mocks
+    jest.clearAllMocks();
+    
+    // Set up mocks
+    (Neo4jDriverSingleton.getInstance as jest.Mock).mockReturnValue(mockDriver);
+    (getEmbeddingForText as jest.Mock).mockResolvedValue(mockEmbedding);
+    mockSession.run.mockResolvedValue({ records: mockRecords });
+  });
+  
+  it('should retrieve semantically similar nodes based on query text', async () => {
+    // Test parameters
+    const params = {
+      queryText: 'quantum physics',
+      nodeTypes: ['Concept'],
+      limit: 5
+    };
+    
+    // Execute the tool
+    const result = await semanticRetrieval.execute(params);
+    
+    // Expectations
+    expect(getEmbeddingForText).toHaveBeenCalledWith('quantum physics');
+    expect(Neo4jDriverSingleton.getInstance).toHaveBeenCalled();
+    expect(mockDriver.session).toHaveBeenCalled();
+    expect(mockSession.run).toHaveBeenCalled();
+    expect(mockSession.close).toHaveBeenCalled();
+    
+    // Verify the query contained the correct index name for Concept
+    const queryArg = mockSession.run.mock.calls[0][0];
+    expect(queryArg).toContain('concept-embeddings');
+    
+    // Verify result structure
+    expect(result).toEqual([
+      {
+        id: 'concept-1',
+        name: 'Quantum Mechanics',
+        definition: 'A fundamental theory in physics',
+        nodeType: 'Concept',
+        similarityScore: 0.95
+      }
+    ]);
+  });
+  
+  it('should handle errors gracefully', async () => {
+    // Mock a database error
+    mockSession.run.mockRejectedValue(new Error('Database connection failed'));
+    
+    // Test parameters
+    const params = {
+      queryText: 'quantum physics',
+      nodeTypes: ['Concept'],
+      limit: 5
+    };
+    
+    // Expect the tool to throw an error
+    await expect(semanticRetrieval.execute(params)).rejects.toThrow('Failed to retrieve semantic nodes');
+    
+    // Ensure session is still closed even when error occurs
+    expect(mockSession.close).toHaveBeenCalled();
+  });
+});
+```
+
+## Testing OpenAI Embeddings
+
+Test embedding functions with mocking:
+
+```typescript
+// tests/unit/embeddings.test.ts
+import { getEmbeddingForText } from '../../lib/ai/embeddings';
+import { OpenAI } from 'openai';
+
+// Mock OpenAI client
+jest.mock('openai', () => {
+  return {
+    OpenAI: jest.fn().mockImplementation(() => ({
+      embeddings: {
+        create: jest.fn()
+      }
+    }))
+  };
+});
+
+describe('Embeddings Service', () => {
+  let mockOpenAIClient: jest.Mocked<OpenAI>;
+  
+  beforeEach(() => {
+    // Clear mocks
+    jest.clearAllMocks();
+    
+    // Get mocked OpenAI instance
+    mockOpenAIClient = new OpenAI() as jest.Mocked<OpenAI>;
+    
+    // Set up embedding response
+    const mockEmbedding = Array(3072).fill(0.1);
+    mockOpenAIClient.embeddings.create.mockResolvedValue({
+      object: 'list',
+      data: [{ embedding: mockEmbedding, index: 0, object: 'embedding' }],
+      model: 'text-embedding-3-large',
+      usage: { prompt_tokens: 5, total_tokens: 5 }
+    });
+  });
+  
+  it('should generate embeddings with correct parameters', async () => {
+    // Call the function
+    const result = await getEmbeddingForText('test query');
+    
+    // Verify OpenAI was called with correct parameters
+    expect(mockOpenAIClient.embeddings.create).toHaveBeenCalledWith({
+      model: 'text-embedding-3-large',
+      input: 'test query',
+      dimensions: 3072
+    });
+    
+    // Verify result is an array of 3072 dimensions
+    expect(result).toHaveLength(3072);
+    expect(result[0]).toEqual(0.1);
+  });
+  
+  it('should cache results for identical queries', async () => {
+    // Call the function twice with the same input
+    await getEmbeddingForText('repeated query');
+    await getEmbeddingForText('repeated query');
+    
+    // Verify OpenAI was called only once
+    expect(mockOpenAIClient.embeddings.create).toHaveBeenCalledTimes(1);
+  });
+  
+  it('should handle OpenAI errors', async () => {
+    // Mock an API error
+    mockOpenAIClient.embeddings.create.mockRejectedValue(
+      new Error('Rate limit exceeded')
+    );
+    
+    // Expect the function to throw an error
+    await expect(getEmbeddingForText('error query')).rejects.toThrow(
+      'Failed to generate embedding'
+    );
+  });
+});
+```
+
+## Integration Testing
+
+Test the full flow from API to Neo4j:
+
+```typescript
+// tests/integration/chat-api.test.ts
+import { POST } from '../../app/(chat)/api/chat/route';
+import Neo4jDriverSingleton from '../../lib/neo4j/driver';
+
+// Partially mock Neo4j (but use a real test database instance)
+jest.mock('../../lib/neo4j/driver', () => {
+  // Use a test database connection
+  const neo4j = jest.requireActual('neo4j-driver');
+  
+  return {
+    __esModule: true,
+    default: {
+      getInstance: jest.fn().mockReturnValue(
+        neo4j.driver(
+          process.env.TEST_NEO4J_URI || 'bolt://localhost:7687',
+          neo4j.auth.basic(
+            process.env.TEST_NEO4J_USERNAME || 'neo4j',
+            process.env.TEST_NEO4J_PASSWORD || 'password'
+          )
+        )
+      )
+    }
+  };
+});
+
+describe('Chat API Integration', () => {
+  beforeAll(async () => {
+    // Set up test database with required constraints and indexes
+    const driver = Neo4jDriverSingleton.getInstance();
+    const session = driver.session();
+    
+    try {
+      // Clear test data
+      await session.run('MATCH (n) DETACH DELETE n');
+      
+      // Create test constraints
+      await session.run('CREATE CONSTRAINT IF NOT EXISTS FOR (n:Concept) REQUIRE n.id IS UNIQUE');
+      
+      // Create test data
+      await session.run(`
+        CREATE (c:Concept {
+          id: 'test-concept',
+          name: 'Test Concept',
+          definition: 'A concept used in tests',
+          embedding: $embedding
+        })
+      `, {
+        embedding: Array(3072).fill(0.1)
+      });
+    } finally {
+      await session.close();
+    }
+  });
+  
+  it('should process a chat request with tool calling', async () => {
+    // Mock Request object
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'user', content: 'Tell me about testing' }
+        ]
+      })
+    });
+    
+    // Call the API route handler
+    const response = await POST(request);
+    
+    // Verify the response
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toContain('text/event-stream');
+    
+    // Read the streaming response (more complex in real tests)
+    const reader = response.body?.getReader();
+    // ... process the stream
+  });
+  
+  afterAll(async () => {
+    // Clean up test database
+    const driver = Neo4jDriverSingleton.getInstance();
+    const session = driver.session();
+    
+    try {
+      await session.run('MATCH (n) DETACH DELETE n');
+    } finally {
+      await session.close();
+      await driver.close();
+    }
+  });
+});
+```
+
+## UI Component Testing
+
+Test React components with React Testing Library:
+
+```typescript
+// tests/components/graph-visualization.test.tsx
+import { render, screen } from '@testing-library/react';
+import { ForceGraph } from '../../components/graph-visualization/force-graph';
+
+// Mock react-force-graph-2d
+jest.mock('react-force-graph-2d', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(({ nodeLabel, linkLabel, onNodeClick }) => {
+      return <div data-testid="mock-force-graph">Mock Graph</div>;
+    })
+  };
+});
+
+// Mock ResizeObserver
+global.ResizeObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
+}));
+
+describe('ForceGraph Component', () => {
+  const mockNodes = [
+    { id: 'node1', name: 'Node 1', type: 'Person' },
+    { id: 'node2', name: 'Node 2', type: 'Concept' }
+  ];
+  
+  const mockLinks = [
+    { source: 'node1', target: 'node2', type: 'KNOWS' }
+  ];
+  
+  it('should render the force graph component', () => {
+    // Set mock element size
+    jest.spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockReturnValue(800);
+    jest.spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockReturnValue(600);
+    
+    // Render component
+    render(
+      <ForceGraph 
+        nodes={mockNodes} 
+        links={mockLinks} 
+        onNodeClick={jest.fn()} 
+      />
+    );
+    
+    // Verify component renders
+    expect(screen.getByTestId('mock-force-graph')).toBeInTheDocument();
+  });
+  
+  it('should call onNodeClick when a node is clicked', () => {
+    // Create mock handler
+    const handleNodeClick = jest.fn();
+    
+    // Set mock element size
+    jest.spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockReturnValue(800);
+    jest.spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockReturnValue(600);
+    
+    // Render component
+    const { getByTestId } = render(
+      <ForceGraph 
+        nodes={mockNodes} 
+        links={mockLinks} 
+        onNodeClick={handleNodeClick} 
+      />
+    );
+    
+    // Mock a node click (in a real test, you'd trigger the click through the props)
+    const mockForceGraph = require('react-force-graph-2d').default;
+    const onNodeClickHandler = mockForceGraph.mock.calls[0][0].onNodeClick;
+    onNodeClickHandler(mockNodes[0]);
+    
+    // Verify handler was called
+    expect(handleNodeClick).toHaveBeenCalledWith(mockNodes[0]);
+  });
+});
+```
+
+## End-to-End Testing
+
+Use Playwright for E2E testing:
+
+```typescript
+// tests/e2e/chat.test.ts
+import { test, expect } from '@playwright/test';
+
+test('User can send a message and receive a response', async ({ page }) => {
+  // Navigate to chat page
+  await page.goto('/');
+  
+  // Type a message
+  await page.fill('[placeholder="Type your message..."]', 'What is quantum mechanics?');
+  
+  // Send the message
+  await page.click('button[type="submit"]');
+  
+  // Wait for response to appear
+  await page.waitForSelector('[data-testid="message-assistant"]');
+  
+  // Verify the response contains content
+  const responseText = await page.textContent('[data-testid="message-assistant"]');
+  expect(responseText).not.toBeNull();
+  expect(responseText?.length).toBeGreaterThan(0);
+});
+
+test('Graph visualization appears after relevant query', async ({ page }) => {
+  // Navigate to chat page
+  await page.goto('/');
+  
+  // Type a message that would trigger graph visualization
+  await page.fill(
+    '[placeholder="Type your message..."]', 
+    'Show me a graph of concepts related to quantum physics'
+  );
+  
+  // Send the message
+  await page.click('button[type="submit"]');
+  
+  // Wait for graph visualization to appear
+  await page.waitForSelector('.graph-visualization');
+  
+  // Verify graph has nodes
+  const nodesCount = await page.evaluate(() => {
+    return document.querySelectorAll('.graph-visualization circle').length;
+  });
+  
+  expect(nodesCount).toBeGreaterThan(0);
+});
+```

@@ -1,0 +1,194 @@
+---
+description: AI SDK Tool Implementation Patterns
+globs: "lib/ai/tools/**/*.ts"
+---
+
+# AI SDK Tool Implementation Guidelines
+
+## Tool Structure Pattern
+
+Follow this consistent pattern for all AI SDK tools:
+
+```typescript
+import { z } from 'zod';
+import Neo4jDriverSingleton from '../../neo4j/driver';
+
+export const toolName = {
+  description: "Clear description of what the tool does",
+  parameters: z.object({
+    // Define parameters with Zod schema
+    param1: z.string().describe("Description of parameter 1"),
+    param2: z.number().optional().describe("Description of parameter 2"),
+    // Add more parameters as needed
+  }),
+  execute: async function({ param1, param2 }) {
+    // Get Neo4j driver instance
+    const driver = Neo4jDriverSingleton.getInstance();
+    const session = driver.session({ defaultAccessMode: neo4j.session.READ }); // or WRITE
+    
+    try {
+      // Implement tool logic
+      // Execute Neo4j queries
+      // Process results
+      
+      return {
+        // Return structured results
+      };
+    } catch (error) {
+      console.error(`Tool execution failed: ${error.message}`, error);
+      throw new Error(`Failed to execute tool: ${error.message}`);
+    } finally {
+      await session.close(); // Always close the session
+    }
+  }
+};
+```
+
+## Parameter Validation
+
+Use Zod schemas for parameter validation with proper descriptions:
+
+```typescript
+parameters: z.object({
+  // String parameters
+  query: z.string().describe("The search query text"),
+  
+  // Optional parameters
+  limit: z.number().int().min(1).max(100).default(10)
+    .describe("Maximum number of results to return"),
+  
+  // Enum parameters
+  nodeType: z.enum(["Person", "Concept", "Thought"])
+    .describe("Type of node to search for"),
+  
+  // Array parameters
+  nodeTypes: z.array(z.string())
+    .describe("Types of nodes to include in search"),
+  
+  // Record parameters
+  properties: z.record(z.any()).optional()
+    .describe("Additional properties to filter by")
+});
+```
+
+## Error Handling
+
+Implement consistent error handling in all tools:
+
+```typescript
+try {
+  // Tool implementation
+} catch (error) {
+  // 1. Log the error with context
+  console.error(`Error in toolName: ${error.message}`, {
+    parameters: { param1, param2 },
+    stack: error.stack
+  });
+  
+  // 2. Throw a user-friendly error
+  if (error.code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
+    throw new Error('This entity already exists in the database');
+  } else if (error.code?.startsWith('Neo.ClientError')) {
+    throw new Error(`Database error: ${error.message}`);
+  } else {
+    throw new Error('An unexpected error occurred while processing your request');
+  }
+} finally {
+  // 3. Always close resources
+  await session.close();
+}
+```
+
+## Result Processing
+
+Process Neo4j results consistently:
+
+```typescript
+const result = await session.run(query, parameters);
+
+// Convert records to JavaScript objects
+return result.records.map(record => {
+  const node = record.get('n');
+  return {
+    id: node.properties.id,
+    name: node.properties.name,
+    // Add other properties as needed
+    type: node.labels[0], // Get the first label as type
+    // Process other fields
+  };
+});
+```
+
+## Key Tool Implementations
+
+### 1. Semantic Retrieval Tool
+
+Implement vector similarity search using Neo4j vector indexes:
+
+```typescript
+// Build queries for each node type and union results
+const nodeQueries = nodeTypes.map(nodeType => {
+  // Get the correct vector index name for this node type
+  const indexName = NODE_TYPE_TO_INDEX[nodeType];
+  
+  return `
+    CALL {
+      CALL db.index.vector.queryNodes("${indexName}", $limit, $embedding)
+      YIELD node, score
+      RETURN node, score, "${nodeType}" AS nodeType
+    }
+  `;
+});
+
+// Execute combined query with UNION ALL
+const query = nodeQueries.join("\nUNION ALL\n") + "\nORDER BY score DESC LIMIT $finalLimit";
+```
+
+### 2. Node Extraction Tool
+
+Use LLM to extract structured data from text:
+
+```typescript
+// Extract entities from text using LLM
+const systemPrompt = `
+Extract entities from the text according to this schema:
+[Include schema definition]
+
+Return a JSON object with "nodes" and "relationships" arrays.
+`;
+
+// Use the LLM to analyze the text
+const response = await model.generateContent([
+  { role: 'system', content: systemPrompt },
+  { role: 'user', content: inputText }
+]);
+
+// Parse the JSON response
+const extractedData = parseJsonFromLLMResponse(response);
+
+// Process and store the extracted data
+const session = driver.session({ defaultAccessMode: neo4j.session.WRITE });
+try {
+  await saveNodesToNeo4j(session, extractedData);
+  return { success: true, nodesCreated: extractedData.nodes.length };
+} finally {
+  await session.close();
+}
+```
+
+### 3. Graph Analysis Tools
+
+Implement network analysis using Graph Data Science (GDS) library:
+
+```typescript
+// Example: Compute betweenness centrality
+const query = `
+CALL gds.betweenness.stream('personGraph')
+YIELD nodeId, score
+RETURN gds.util.asNode(nodeId) AS person, score
+ORDER BY score DESC
+LIMIT $limit
+`;
+
+const result = await session.run(query, { limit: neo4j.int(limit) });
+```

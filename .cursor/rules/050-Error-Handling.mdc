@@ -1,0 +1,215 @@
+---
+description: Error Handling Patterns
+alwaysApply: true
+---
+
+# Error Handling Guidelines
+
+## Database Error Handling
+
+Use consistent error handling patterns for Neo4j operations:
+
+```typescript
+try {
+  // Database operation
+  const result = await session.run(query, parameters);
+  return processResults(result);
+} catch (error) {
+  // Log detailed error for debugging
+  console.error("Database operation failed:", {
+    operation: "queryName",
+    query,
+    parameters,
+    error: error.message,
+    stack: error.stack,
+    code: error.code
+  });
+  
+  // Categorize and handle specific Neo4j errors
+  if (error.code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
+    throw new Error('A record with this identifier already exists');
+  } else if (error.code === 'Neo.ClientError.Statement.SyntaxError') {
+    throw new Error('Invalid query format');
+  } else if (error.code?.startsWith('Neo.ClientError')) {
+    throw new Error(`Database error: ${error.message}`);
+  } else {
+    // Generic error for other cases
+    throw new Error('An unexpected error occurred while accessing the database');
+  }
+} finally {
+  // Always close the session
+  await session.close();
+}
+```
+
+## AI Service Error Handling
+
+Handle errors from OpenAI and other AI services:
+
+```typescript
+try {
+  // AI API call
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [...],
+    // other parameters
+  });
+  
+  return processResponse(response);
+} catch (error) {
+  // OpenAI error categories
+  if (error.status === 429) {
+    console.error("Rate limit exceeded:", error);
+    throw new Error("Too many requests. Please try again in a moment.");
+  } else if (error.status === 400) {
+    console.error("Invalid request to OpenAI:", error);
+    throw new Error("Invalid request parameters");
+  } else if (error.status === 401) {
+    console.error("Authentication error with OpenAI:", error);
+    throw new Error("Authentication error with AI service");
+  } else {
+    console.error("OpenAI service error:", error);
+    throw new Error("AI service unavailable. Please try again later.");
+  }
+}
+```
+
+## Tool Error Handling Pattern
+
+Use this pattern in all AI SDK tools:
+
+```typescript
+execute: async function(parameters) {
+  try {
+    // Tool implementation
+    
+    return result;
+  } catch (error) {
+    // 1. Log detailed error for debugging
+    console.error(`Error in toolName:`, {
+      parameters,
+      errorMessage: error.message,
+      errorCode: error.code,
+      stack: error.stack
+    });
+    
+    // 2. User-friendly error message based on likely cause
+    if (error.message.includes('not found')) {
+      throw new Error(`Requested information not found: ${error.message}`);
+    } else if (error.message.includes('authentication')) {
+      throw new Error('Database authentication error. Please check configuration.');
+    } else if (error.message.includes('timeout')) {
+      throw new Error('Operation timed out. The query may be too complex.');
+    } else {
+      // Generic but still somewhat informative
+      throw new Error(`The operation failed: ${error.message}`);
+    }
+  }
+}
+```
+
+## API Route Error Handling
+
+Handle errors in API routes:
+
+```typescript
+export async function POST(request: Request) {
+  try {
+    // Parse request
+    const { messages } = await request.json();
+    
+    // Process request
+    const stream = streamText({
+      // Configuration...
+    });
+    
+    return stream.toDataStreamResponse();
+  } catch (error) {
+    console.error("API route error:", error);
+    
+    // Return appropriate status code based on error
+    if (error.message.includes('invalid request')) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } else if (error.message.includes('unauthorized')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } else {
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+}
+```
+
+## Client-Side Error Handling
+
+Handle API errors in React components:
+
+```tsx
+'use client';
+
+import { useChat } from 'ai/react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+
+export function Chat() {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
+    onError: (error) => {
+      console.error("Chat error:", error);
+      setErrorMessage(error.message || 'An unexpected error occurred');
+      toast.error(error.message || 'Failed to send message');
+    }
+  });
+  
+  return (
+    <div className="chat-container">
+      {/* Messages display */}
+      <div className="messages-container">
+        {messages.map(message => (
+          <MessageComponent key={message.id} message={message} />
+        ))}
+        
+        {/* Show loading state */}
+        {isLoading && <div className="loading-indicator">Processing...</div>}
+        
+        {/* Show error message */}
+        {errorMessage && (
+          <div className="error-message bg-red-50 text-red-600 p-3 rounded-md mb-4">
+            <p className="font-medium">Error</p>
+            <p>{errorMessage}</p>
+            <button 
+              className="text-sm text-red-700 underline mt-2"
+              onClick={() => setErrorMessage(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {/* Chat input form */}
+      <form onSubmit={handleSubmit} className="chat-input-form">
+        <input
+          value={input}
+          onChange={handleInputChange}
+          placeholder="Type your message..."
+          className="chat-input"
+          disabled={isLoading}
+        />
+        <button type="submit" disabled={isLoading || !input.trim()}>
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+```
