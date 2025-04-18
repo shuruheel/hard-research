@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This project is a research assistant application that integrates Neo4j graph database capabilities with the Vercel AI SDK 4.2. The application leverages advanced AI features including reasoning capture, message parts, multi-step tool calling, and data streaming to create a knowledge graph-powered research system.
+This project is a research assistant application that integrates Neo4j graph database capabilities with the Vercel AI SDK. The application leverages advanced AI features including reasoning capture, message parts, multi-step tool calling, and data streaming to create a knowledge graph-powered research system.
 
 ## Build/Lint/Test Commands
 - Install: `npm install` or `pnpm install`
@@ -34,7 +34,7 @@ This project is a research assistant application that integrates Neo4j graph dat
 - **Formatting**: Use 2-space indentation; semicolons required; format with Biome
 
 ## Project Objectives
-- Integrate Neo4j graph database tools with the Vercel AI SDK 4.2
+- Integrate Neo4j graph database tools with the Vercel AI SDK
 - Implement tools for querying and manipulating the semantic knowledge graph
 - Create a Deep Research system with both web search and graph search
 - Utilize OpenAI Responses API for web search capabilities
@@ -59,7 +59,7 @@ This project is a research assistant application that integrates Neo4j graph dat
   - 'Thought': 'thought-embeddings'
 - All embeddings use OpenAI's `text-embedding-3-large` model with 3072 dimensions
 
-## AI SDK 4.2 Integration Guidelines
+## AI SDK Integration Guidelines
 - Use OpenAI Responses API for web search capabilities
 - Leverage Message Parts rendering for multi-type content display
 - Capture reasoning tokens from supported models with the sendReasoning option

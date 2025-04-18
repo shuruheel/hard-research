@@ -1,9 +1,17 @@
 ---
 description: AI SDK Tool Implementation Patterns
-globs: "lib/ai/tools/**/*.ts"
+globs: *tool*
+alwaysApply: false
 ---
 
 # AI SDK Tool Implementation Guidelines
+
+## Implemented Tools
+
+The following tools have been implemented in Phase 1:
+
+1. **Semantic Retrieval Tool** (`semanticRetrieval.ts`) - Vector-based semantic search across knowledge graph nodes
+2. **Graph Node Extraction Tool** (`extractGraphNodes.ts`) - Extracts entities, concepts, and relationships from conversation messages
 
 ## Tool Structure Pattern
 
@@ -11,7 +19,8 @@ Follow this consistent pattern for all AI SDK tools:
 
 ```typescript
 import { z } from 'zod';
-import Neo4jDriverSingleton from '../../neo4j/driver';
+import { getNeo4jDriver, neo4j } from '../../neo4j/driver';
+import { serializeNeo4j } from '../../neo4j/serializer';
 
 export const toolName = {
   description: "Clear description of what the tool does",
@@ -22,9 +31,8 @@ export const toolName = {
     // Add more parameters as needed
   }),
   execute: async function({ param1, param2 }) {
-    // Get Neo4j driver instance
-    const driver = Neo4jDriverSingleton.getInstance();
-    const session = driver.session({ defaultAccessMode: neo4j.session.READ }); // or WRITE
+    // Get Neo4j session directly
+    const session = getNeo4jDriver().session({ defaultAccessMode: neo4j.session.READ }); // or WRITE
     
     try {
       // Implement tool logic
@@ -35,8 +43,8 @@ export const toolName = {
         // Return structured results
       };
     } catch (error) {
-      console.error(`Tool execution failed: ${error.message}`, error);
-      throw new Error(`Failed to execute tool: ${error.message}`);
+      console.error(`Tool execution failed: ${(error as Error).message}`, error);
+      throw new Error(`Failed to execute tool: ${(error as Error).message}`);
     } finally {
       await session.close(); // Always close the session
     }
@@ -51,24 +59,145 @@ Use Zod schemas for parameter validation with proper descriptions:
 ```typescript
 parameters: z.object({
   // String parameters
-  query: z.string().describe("The search query text"),
+  queryText: z.string().describe("The text query to find relevant information"),
   
-  // Optional parameters
-  limit: z.number().int().min(1).max(100).default(10)
+  // Optional parameters with defaults
+  limit: z.number().int().min(1).max(50).default(10)
     .describe("Maximum number of results to return"),
   
   // Enum parameters
-  nodeType: z.enum(["Person", "Concept", "Thought"])
-    .describe("Type of node to search for"),
+  nodeTypes: z.array(
+    z.enum(["Thought", "ReasoningChain", "Person", "Concept", "Entity", "Proposition"])
+  ).optional().describe("Types of nodes to search (defaults to all)"),
+  
+  // Enum with specific values
+  extractionDepth: z.enum(["minimal", "standard", "deep"]).default("standard")
+    .describe("Level of detail for extraction: minimal (core entities only), standard (entities, concepts, basic relationships), deep (all node types and relationships)"),
   
   // Array parameters
-  nodeTypes: z.array(z.string())
-    .describe("Types of nodes to include in search"),
-  
-  // Record parameters
-  properties: z.record(z.any()).optional()
-    .describe("Additional properties to filter by")
+  messages: z.array(z.object({
+    id: z.string(),
+    role: z.enum(["user", "assistant", "system"]),
+    content: z.string().optional(),
+    parts: z.array(z.any()).optional()
+  }))
 });
+```
+
+## Semantic Retrieval Tool
+
+The semanticRetrieval tool uses vector embeddings to find semantically similar nodes in the knowledge graph:
+
+```typescript
+// 1. Get embedding for query text
+const queryEmbedding = await getEmbeddingForText(queryText);
+
+// 2. Build query for each node type and union results
+const nodeQueries = validNodeTypes.map(nodeType => {
+  const indexName = NODE_TYPE_TO_INDEX[nodeType];
+  
+  return `
+    CALL db.index.vector.queryNodes("${indexName}", $limit, $embedding)
+    YIELD node, score
+    RETURN node, score, "${nodeType}" AS nodeType
+  `;
+});
+
+// 3. Execute combined query with UNION ALL
+const query = nodeQueries.join("\nUNION ALL\n") + "\nORDER BY score DESC LIMIT $finalLimit";
+
+const result = await session.run(query, {
+  embedding: queryEmbedding,
+  limit: neo4j.int(Math.ceil(limit / validNodeTypes.length)), // Split limit across types
+  finalLimit: neo4j.int(limit) // Final limit after union
+});
+
+// 4. Process results with type-specific handling
+return result.records.map(record => {
+  const node = record.get('node');
+  const score = record.get('score');
+  const nodeType = record.get('nodeType');
+  
+  // Base properties all nodes should have
+  const baseProps = {
+    id: node.properties.id,
+    name: node.properties.name,
+    nodeType: nodeType,
+    similarityScore: score
+  };
+  
+  // Add type-specific properties based on node type
+  switch(nodeType) {
+    case "Thought":
+      return {
+        ...baseProps,
+        thoughtContent: properties.thoughtContent,
+        confidence: properties.confidence
+      };
+    // Additional case handlers for other node types
+  }
+});
+```
+
+## Graph Node Extraction Tool
+
+The extractGraphNodes tool uses LLM to extract entities and relationships from text:
+
+```typescript
+// 1. Prepare conversation context for LLM analysis
+const conversationText = prepareConversationText(messages);
+
+// 2. Extract reasoning chains from reasoning tokens if available
+const reasoningChains = extractReasoningChains(messages);
+
+// 3. Use LLM to extract nodes based on schema
+const systemPrompt = `
+Extract entities from the conversation according to this knowledge graph schema:
+- Entity: Physical objects, people, locations (id, name, type, description)
+- Concept: Abstract ideas and categories (id, name, definition, domain)
+- Thought: Subjective interpretations or analyses (id, name, thoughtContent, confidence)
+...
+
+Format your response as a valid JSON object with "nodes" and "relationships" arrays.
+`;
+
+const response = await openai.chat.completions.create({
+  model: "gpt-4o",
+  messages: [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: conversationText }
+  ]
+});
+
+// 4. Parse and process extracted data
+const extractedNodes = JSON.parse(extractedJson);
+
+// 5. Save nodes and relationships to Neo4j
+const session = getNeo4jDriver().session({ defaultAccessMode: neo4j.session.WRITE });
+try {
+  for (const node of extractedNodes.nodes) {
+    const nodeType = node.type;
+    const { type, ...nodeProperties } = { ...node };
+    
+    await session.run(`
+      MERGE (n:${nodeType} {id: $id})
+      SET n += $properties
+      RETURN n
+    `, { id: node.id, properties: nodeProperties });
+  }
+  
+  // Create relationships
+  for (const rel of extractedNodes.relationships) {
+    await session.run(`
+      MATCH (source {id: $sourceId})
+      MATCH (target {id: $targetId})
+      MERGE (source)-[r:${rel.type}]->(target)
+      RETURN r
+    `, { sourceId: rel.source, targetId: rel.target });
+  }
+} finally {
+  await session.close();
+}
 ```
 
 ## Error Handling
@@ -80,18 +209,18 @@ try {
   // Tool implementation
 } catch (error) {
   // 1. Log the error with context
-  console.error(`Error in toolName: ${error.message}`, {
+  console.error(`Error in ${toolName}: ${(error as Error).message}`, {
     parameters: { param1, param2 },
-    stack: error.stack
+    stack: (error as Error).stack
   });
   
-  // 2. Throw a user-friendly error
-  if (error.code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
+  // 2. Throw a user-friendly error with specific Neo4j error codes
+  if ((error as any).code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
     throw new Error('This entity already exists in the database');
-  } else if (error.code?.startsWith('Neo.ClientError')) {
-    throw new Error(`Database error: ${error.message}`);
+  } else if ((error as any).code?.startsWith('Neo.ClientError')) {
+    throw new Error(`Database error: ${(error as Error).message}`);
   } else {
-    throw new Error('An unexpected error occurred while processing your request');
+    throw new Error(`Failed to execute tool: ${(error as Error).message}`);
   }
 } finally {
   // 3. Always close resources
@@ -99,96 +228,13 @@ try {
 }
 ```
 
-## Result Processing
+## Future Tools (Phase 2)
 
-Process Neo4j results consistently:
+The following tools are planned for Phase 2 implementation:
 
-```typescript
-const result = await session.run(query, parameters);
-
-// Convert records to JavaScript objects
-return result.records.map(record => {
-  const node = record.get('n');
-  return {
-    id: node.properties.id,
-    name: node.properties.name,
-    // Add other properties as needed
-    type: node.labels[0], // Get the first label as type
-    // Process other fields
-  };
-});
-```
-
-## Key Tool Implementations
-
-### 1. Semantic Retrieval Tool
-
-Implement vector similarity search using Neo4j vector indexes:
-
-```typescript
-// Build queries for each node type and union results
-const nodeQueries = nodeTypes.map(nodeType => {
-  // Get the correct vector index name for this node type
-  const indexName = NODE_TYPE_TO_INDEX[nodeType];
-  
-  return `
-    CALL {
-      CALL db.index.vector.queryNodes("${indexName}", $limit, $embedding)
-      YIELD node, score
-      RETURN node, score, "${nodeType}" AS nodeType
-    }
-  `;
-});
-
-// Execute combined query with UNION ALL
-const query = nodeQueries.join("\nUNION ALL\n") + "\nORDER BY score DESC LIMIT $finalLimit";
-```
-
-### 2. Node Extraction Tool
-
-Use LLM to extract structured data from text:
-
-```typescript
-// Extract entities from text using LLM
-const systemPrompt = `
-Extract entities from the text according to this schema:
-[Include schema definition]
-
-Return a JSON object with "nodes" and "relationships" arrays.
-`;
-
-// Use the LLM to analyze the text
-const response = await model.generateContent([
-  { role: 'system', content: systemPrompt },
-  { role: 'user', content: inputText }
-]);
-
-// Parse the JSON response
-const extractedData = parseJsonFromLLMResponse(response);
-
-// Process and store the extracted data
-const session = driver.session({ defaultAccessMode: neo4j.session.WRITE });
-try {
-  await saveNodesToNeo4j(session, extractedData);
-  return { success: true, nodesCreated: extractedData.nodes.length };
-} finally {
-  await session.close();
-}
-```
-
-### 3. Graph Analysis Tools
-
-Implement network analysis using Graph Data Science (GDS) library:
-
-```typescript
-// Example: Compute betweenness centrality
-const query = `
-CALL gds.betweenness.stream('personGraph')
-YIELD nodeId, score
-RETURN gds.util.asNode(nodeId) AS person, score
-ORDER BY score DESC
-LIMIT $limit
-`;
-
-const result = await session.run(query, { limit: neo4j.int(limit) });
-```
+1. **Person Centrality Tool** - Analyze network centrality metrics for Person nodes
+2. **Community Detection Tool** - Identify communities in the knowledge graph
+3. **Bridging Concepts Tool** - Find concepts that connect different domains
+4. **Concept Neighborhood Tool** - Explore the neighborhood of a concept
+5. **Reasoning Chain Exploration Tool** - Analyze reasoning chains and their steps
+6. **Concept-Reasoning Connection Tool** - Find connections between concepts and reasoning

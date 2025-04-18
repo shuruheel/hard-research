@@ -4,7 +4,7 @@ This document provides guidance on integrating the OpenAI Responses API with our
 
 ## Overview
 
-The OpenAI Responses API, available in AI SDK 4.2+, provides several advantages for our knowledge graph integration:
+The OpenAI Responses API, available in AI SDK+, provides several advantages for our knowledge graph integration:
 
 1. Built-in web search with the `webSearchPreview` tool
 2. Persistent chat history
