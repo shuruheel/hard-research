@@ -13,24 +13,11 @@ The implementation plan is divided into three phases with refined priorities:
 
 ### Step 1: Setup Neo4j Connection (1-2 hours)
 
-1. Install dependencies:
-   ```bash
-   npm install neo4j-driver
-   ```
-
-2. Create Neo4j driver singleton:
+1. Create Neo4j driver singleton:
    - Create file: `lib/neo4j/driver.ts`
    - Implement singleton pattern for connection management
    - Add environment variable validation
    - Handle Integer and DateTime type conversions
-
-3. Update environment variables:
-   - Add Neo4j connection details to `.env.local`:
-     ```
-     NEO4J_URI=bolt://localhost:7687
-     NEO4J_USERNAME=neo4j
-     NEO4J_PASSWORD=password
-     ```
 
 ### Step 2: Create Core Utility Functions (2-3 hours)
 
