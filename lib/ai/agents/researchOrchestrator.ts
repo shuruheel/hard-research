@@ -52,7 +52,7 @@ export class ResearchOrchestrator {
     query,
     userId,
     chatId,
-    maxSteps = 5,
+    maxSteps = 3,
     maxSubQueries = 3,
     standardModel = DEFAULT_STANDARD_MODEL,
     reasoningModel = DEFAULT_REASONING_MODEL,

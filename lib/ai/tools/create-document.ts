@@ -101,19 +101,6 @@ export const createDocument = ({
           
           // Create a formatted version with a "Research Sources" section at the end
           const formattedContent = `${fullContent}
-          
-## Research Sources
-This document was created using Deep Research mode with the following sources:
-
-${graphResults?.map((item, i) => `### Knowledge Graph Source ${i+1}
-Query: "${item.query}"
-Results: ${item.results.substring(0, 200)}...
-`).join('\n\n') || ''}
-
-${webResults?.map((item, i) => `### Web Source ${i+1}
-Query: "${item.query}"
-Results: ${item.results.substring(0, 200)}...
-`).join('\n\n') || ''}
 `;
           
           if (session?.user?.id) {

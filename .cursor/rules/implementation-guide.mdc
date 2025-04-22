@@ -1,0 +1,48 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Implementation Guide for Changes
+
+This guide provides an implementation plan for the following changes:
+
+1. Remove all functionality related to extraction and generation of reasoning chains
+2. Remove the mode selector from the UI
+3. Use LLM to determine whether a query is simple or requires deep research
+4. Use LLM with web search and semanticRetrieval tools for simple queries
+5. Use existing deep research functionality for complex queries
+6. Display final report from deep research as an artifact
+
+## Files to Modify
+
+### Remove Reasoning Chain Functionality
+
+- [lib/ai/tools/deepResearch.ts](mdc:lib/ai/tools/deepResearch.ts)
+  - Remove reasoning chain generation code
+
+- [lib/ai/agents/researchOrchestrator.ts](mdc:lib/ai/agents/researchOrchestrator.ts)
+  - Remove reasoning chain processing logic
+
+### Query Classification Implementation
+
+- [app/(chat)/api/chat/route.ts](mdc:app/(chat)/api/chat/route.ts)
+  - Implement LLM-based query classification
+  - Configure tools based on classification results
+  - Integrate artifact creation for deep research results
+
+### Artifact Integration
+
+- [components/artifact.tsx](mdc:components/artifact.tsx)
+  - Ensure correct handling of research artifacts
+  
+- Client files that need updates:
+  - [artifacts/text/client.ts](mdc:artifacts/text/client.ts) - For displaying text research results
+
+## Implementation Flow
+
+1. Remove reasoning chain generation code (we still need to retrieve reasoning chains)
+2. Implement query classification in route.ts
+3. Update tool configuration based on query classification
+4. Implement artifact creation for deep research results
+5. Test the end-to-end flow

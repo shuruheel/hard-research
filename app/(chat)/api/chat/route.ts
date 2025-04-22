@@ -125,7 +125,7 @@ export async function POST(request: Request) {
         const isWanderMode = selectedChatModel === 'wander-mode';
 
         // Configure maximum tool steps based on selected mode
-        const maxSteps = isGoDeepMode ? 15 : 5;
+        const maxSteps = isGoDeepMode ? 3 : 2;
 
         // Extract user's query from message
         let userQuery = "";
@@ -259,19 +259,6 @@ export async function POST(request: Request) {
                       try {
                         // Format the research result with sources
                         const formattedContent = `${deepResearchResult.result}
-                        
-## Research Sources
-This document was created using Deep Research mode with the following sources:
-
-${deepResearchResult.graphResults?.map((item, i) => `### Knowledge Graph Source ${i+1}
-Query: "${item.query}"
-Results: ${item.results.substring(0, 200)}...
-`).join('\n\n') || ''}
-
-${deepResearchResult.webResults?.map((item, i) => `### Web Source ${i+1}
-Query: "${item.query}"
-Results: ${item.results.substring(0, 200)}...
-`).join('\n\n') || ''}
 `;
                         
                         // Save document directly using the db query
@@ -283,20 +270,11 @@ Results: ${item.results.substring(0, 200)}...
                           userId: session.user.id,
                         });
                         
-                        // Send text deltas to simulate typing for better UX
-                        const contentChunks = formattedContent.split(' ');
-                        for (const chunk of contentChunks.slice(0, 20)) {
-                          dataStream.writeData({
-                            type: 'text-delta',
-                            content: chunk + ' ',
-                          });
-                          await new Promise(resolve => setTimeout(resolve, 5));
-                        }
-                        
-                        // Just indicate there's more content
+                        // Instead of sending text deltas that duplicate content in the chat,
+                        // just send a reference message to the artifact
                         dataStream.writeData({
                           type: 'text-delta',
-                          content: '... (full document available in artifacts)',
+                          content: 'I\'ve created a detailed research report based on your query. You can view it in the artifacts panel.',
                         });
                         
                         // Notify client about new artifact
@@ -352,14 +330,14 @@ Results: ${item.results.substring(0, 200)}...
         if (isGoDeepMode && deepResearchPromise) {
           // Wait for deep research to complete and then push results to the stream
           deepResearchPromise.then(deepResearchResult => {
-            // Add the research results to the stream
-            // For the newer AI SDK, we need to use the appropriate method to append data
+            // In deep research mode, we don't need to merge results again since we already
+            // handle it in the onFinish callback with the artifact creation.
+            // We'll just use this to update metadata if needed.
             if (result.mergeIntoDataStream) {
               const streamOptions: ExtendedDataStreamOptions = {
                 sendReasoning: true,
                 metadata: {
                   isGoDeepMode: true,
-                  response: deepResearchResult.result,
                   reasoning: deepResearchResult.reasoningChains.join('\n\n')
                 }
               };
