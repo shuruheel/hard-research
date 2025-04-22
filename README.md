@@ -1,4 +1,4 @@
-# Deep Research System
+# Deep Research System Powered by Neo (Based on Vercel AI Chatbot)
 
 A powerful AI research assistant built with Next.js, Neo4j graph database, and advanced AI capabilities that helps you conduct comprehensive research with knowledge graph integration.
 
