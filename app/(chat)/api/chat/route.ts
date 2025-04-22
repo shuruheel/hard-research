@@ -169,9 +169,11 @@ export async function POST(request: Request) {
         // For Go Deep mode, we'll explicitly call deepResearch right away
         // with the user's query, but we need to handle it specially
         let deepResearchPromise: Promise<DeepResearchResult> | null = null;
-        
+        let deepResearchInProgress = false;
+
         if (isGoDeepMode && userQuery) {
           // Start deep research to run in parallel
+          deepResearchInProgress = true;
           deepResearchPromise = deepResearch.execute({
             query: userQuery,
             maxSteps,
@@ -187,15 +189,32 @@ export async function POST(request: Request) {
           });
         }
 
+        // Define a special system prompt for deep research mode
+        let systemInstructions = systemPrompt({ selectedChatModel });
+
+        // If in deep research mode, add a specific instruction to wait for research results
+        if (isGoDeepMode) {
+          systemInstructions = `${systemInstructions}
+
+IMPORTANT: I am currently conducting deep research on your query. Please wait for the research to complete before making any tool calls or providing detailed responses. 
+You should:
+1. Acknowledge the query
+2. Indicate that deep research is being conducted 
+3. DO NOT call any tools until the research is complete
+4. Wait for the research results to be provided before giving a detailed response
+
+Once research is complete, you'll receive the results and can then use the createDocument tool if appropriate.`;
+        }
+
         const streamConfig = {
           model: myProvider.languageModel(selectedChatModel),
-          system: systemPrompt({ selectedChatModel }),
+          system: systemInstructions,
           messages,
           maxSteps,
           experimental_transform: smoothStream({ chunking: 'word' }),
           experimental_generateMessageId: generateUUID,
           experimental_activeTools: isGoDeepMode 
-            ? ['createDocument'] // For Go Deep mode, only enable document creation
+            ? deepResearchInProgress ? [] : ['createDocument'] // Only enable document creation after research completes
             : toolNames, // For Wander mode, use all tools in background
           tools: availableTools,
           onFinish: async (result: OnFinishResult) => {
@@ -330,6 +349,30 @@ export async function POST(request: Request) {
         if (isGoDeepMode && deepResearchPromise) {
           // Wait for deep research to complete and then push results to the stream
           deepResearchPromise.then(deepResearchResult => {
+            // Signal that research is complete and tools can now be used
+            deepResearchInProgress = false;
+            
+            // Send research completion notification to the client
+            dataStream.writeData({
+              type: 'researchComplete',
+              content: 'Research complete. You can now use the results to create a document.'
+            });
+            
+            // Send the research results to the client
+            dataStream.writeData({
+              type: 'text-delta',
+              content: `\n\nResearch complete. Here are the key findings:\n\n${deepResearchResult.result.substring(0, 500)}...`
+            });
+
+            // Send a system message that can be used by the model
+            dataStream.writeData({
+              type: 'system-message',
+              content: {
+                role: "system",
+                content: `Research complete. You may now use the createDocument tool to create a document summarizing the research.`
+              }
+            });
+            
             // In deep research mode, we don't need to merge results again since we already
             // handle it in the onFinish callback with the artifact creation.
             // We'll just use this to update metadata if needed.
@@ -338,12 +381,48 @@ export async function POST(request: Request) {
                 sendReasoning: true,
                 metadata: {
                   isGoDeepMode: true,
-                  reasoning: deepResearchResult.reasoningChains.join('\n\n')
+                  reasoning: deepResearchResult.reasoningChains.join('\n\n'),
+                  researchComplete: true,
+                  researchResults: deepResearchResult.result
                 }
               };
               
               // @ts-ignore - We're extending the data stream options
               result.mergeIntoDataStream(dataStream, streamOptions);
+            }
+            
+            // Since we can't dynamically update the tools, let's create a new document automatically
+            // We don't have access to messages through result.response, so just create the document directly
+            const artifactId = generateUUID();
+            const artifactTitle = `Research Report: ${userQuery.substring(0, 50)}`;
+            
+            try {
+              // Format the research result with sources
+              const formattedContent = `${deepResearchResult.result}`;
+              
+              // Save document directly using the db query
+              if (session.user?.id) {
+                saveDocument({
+                  id: artifactId,
+                  title: artifactTitle,
+                  content: formattedContent,
+                  kind: 'text',
+                  userId: session.user.id,
+                }).then(() => {
+                  // Notify client about new artifact
+                  dataStream.writeData({
+                    type: 'artifact',
+                    content: {
+                      id: artifactId,
+                      title: artifactTitle,
+                      kind: 'text',
+                      createdAt: new Date().toISOString()
+                    }
+                  });
+                });
+              }
+            } catch (error) {
+              console.error("Failed to create artifact from research results:", error);
             }
           }).catch(error => {
             console.error("Failed to process deep research results:", error);

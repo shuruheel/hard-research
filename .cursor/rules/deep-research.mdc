@@ -1,5 +1,36 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# Deep Research System
+
+The deep research system implements an orchestrator-worker pattern for comprehensive multi-step research. It breaks down complex queries into manageable sub-queries and synthesizes findings.
+
+## Core Components
+
+- **Deep Research Tool**: [lib/ai/tools/deepResearch.ts](mdc:lib/ai/tools/deepResearch.ts) - Main implementation of the research process
+- **Research Orchestrator**: [lib/ai/agents/researchOrchestrator.ts](mdc:lib/ai/agents/researchOrchestrator.ts) - Orchestrates the research process
+- **Web Search Worker**: [lib/ai/tools/webSearchWorker.ts](mdc:lib/ai/tools/webSearchWorker.ts) - Handles web search functionality
+- **Semantic Retrieval**: [lib/ai/tools/semanticRetrieval.ts](mdc:lib/ai/tools/semanticRetrieval.ts) - Provides semantic search against Neo4j knowledge graph
+
+## Research Flow
+
+1. Break down main query into focused sub-queries
+2. For each sub-query:
+   - Query knowledge graph for relevant information
+   - Perform web search for additional context
+   - Process information and extract key findings
+3. Synthesize final comprehensive answer from all results
+
+## Integration with UI
+
+The research results are displayed as artifacts in the UI. This is handled by:
+
+- [components/artifact.tsx](mdc:components/artifact.tsx) - Main artifact display component
+- [hooks/use-artifact.ts](mdc:hooks/use-artifact.ts) - Hook for managing artifact state
+
+## API Integration
+
+The deep research functionality is integrated in the chat API route:
+[app/(chat)/api/chat/route.ts](mdc:app/(chat)/api/chat/route.ts)

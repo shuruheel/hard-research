@@ -1,5 +1,42 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# API and Chat System
+
+The API and chat system handles user interactions, AI responses, and tool integration for the research assistant.
+
+## API Routes
+
+- **Chat API**: [app/(chat)/api/chat/route.ts](mdc:app/(chat)/api/chat/route.ts) - Main API route for the chat functionality
+- **Research Progress**: [app/api/research-progress/route.ts](mdc:app/api/research-progress/route.ts) - API for tracking research progress
+
+## Chat Components
+
+- **Chat Messages**: [components/chat-messages.tsx](mdc:components/chat-messages.tsx) - Component for displaying chat messages
+- **Chat Input**: [components/chat-input.tsx](mdc:components/chat-input.tsx) - Component for chat input
+
+## Core Functionality
+
+The chat system provides:
+
+1. **Message Processing**: Extracts queries from user messages
+2. **Chat Management**: Creates or retrieves chat sessions
+3. **AI Integration**: Configures and streams AI responses
+4. **Tool Integration**: Integrates semantic retrieval and deep research tools
+5. **Response Storage**: Saves assistant responses to database
+
+## Tool Integration
+
+The chat API integrates various tools:
+
+- **Semantic Retrieval**: [lib/ai/tools/semanticRetrieval.ts](mdc:lib/ai/tools/semanticRetrieval.ts)
+- **Deep Research**: [lib/ai/tools/deepResearch.ts](mdc:lib/ai/tools/deepResearch.ts)
+- **Web Search**: [lib/ai/tools/webSearchWorker.ts](mdc:lib/ai/tools/webSearchWorker.ts)
+
+## Database Integration
+
+Chat sessions, messages, and user data are stored in the database:
+- **Schema**: [lib/db/schema.ts](mdc:lib/db/schema.ts)
+- **Operations**: [lib/db/operations.ts](mdc:lib/db/operations.ts)
