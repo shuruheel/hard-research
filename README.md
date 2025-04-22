@@ -22,9 +22,13 @@ A powerful AI research assistant built with Next.js, Neo4j graph database, and a
 
 - **UI/UX Features**:
   - Real-time research progress indicator
-  - Collapsible reasoning visualization
   - Document creation with research results
   - Responsive design with mobile support
+
+  ## Known Issues
+  - Reasoning token capture and storage in Neo4j hasn't been tested yet (we need to make better use of the OpenAI Responses API and Anthropic thinking tokens)
+  - Support for spreadsheet artifacts based on the Neo4j graph database hasn't been tested yet
+  - 
 
 ## System Architecture
 
