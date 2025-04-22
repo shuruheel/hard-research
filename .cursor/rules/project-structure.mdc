@@ -1,5 +1,45 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# Project Structure
+
+This is a Next.js application that implements a sophisticated research assistant with a knowledge graph and artifact system.
+
+## Core Components
+
+- **Web App**: Next.js application with chat interface
+- **AI Tools**: Deep research, semantic retrieval, and web search capabilities 
+- **Knowledge Graph**: Neo4j database with vector embeddings for semantic search
+- **Artifacts System**: System for creating and displaying various content types (text, code, images, sheets)
+
+## Important Files
+
+### Main Tools
+
+- Deep Research: [lib/ai/tools/deepResearch.ts](mdc:lib/ai/tools/deepResearch.ts)
+- Semantic Retrieval: [lib/ai/tools/semanticRetrieval.ts](mdc:lib/ai/tools/semanticRetrieval.ts)
+- Web Search: [lib/ai/tools/webSearchWorker.ts](mdc:lib/ai/tools/webSearchWorker.ts)
+
+### Orchestration
+
+- Research Orchestrator: [lib/ai/agents/researchOrchestrator.ts](mdc:lib/ai/agents/researchOrchestrator.ts)
+
+### API Routes
+
+- Chat API: [app/(chat)/api/chat/route.ts](mdc:app/(chat)/api/chat/route.ts)
+
+### Artifacts
+
+- Artifact Component: [components/artifact.tsx](mdc:components/artifact.tsx)
+- Artifact Hook: [hooks/use-artifact.ts](mdc:hooks/use-artifact.ts)
+- Artifact Types:
+  - Text: [artifacts/text/client.ts](mdc:artifacts/text/client.ts)
+  - Code: [artifacts/code/client.ts](mdc:artifacts/code/client.ts)
+  - Image: [artifacts/image/client.ts](mdc:artifacts/image/client.ts)
+  - Sheet: [artifacts/sheet/client.ts](mdc:artifacts/sheet/client.ts)
+
+### Database
+
+- Database Schema: [lib/db/schema.ts](mdc:lib/db/schema.ts)

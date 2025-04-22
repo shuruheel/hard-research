@@ -1,5 +1,39 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# Artifacts System
+
+The artifacts system allows for the creation and display of various content types (text, code, images, sheets) within the application.
+
+## Core Components
+
+- **Artifact Component**: [components/artifact.tsx](mdc:components/artifact.tsx) - Main component for displaying artifacts
+- **Artifact State Management**: [hooks/use-artifact.ts](mdc:hooks/use-artifact.ts) - Hook for managing artifact state
+
+## Artifact Types
+
+The system supports multiple artifact types, each with its own implementation:
+
+- **Text**: 
+  - Client: [artifacts/text/client.ts](mdc:artifacts/text/client.ts)
+  - Server: [lib/artifacts/text/server.ts](mdc:lib/artifacts/text/server.ts)
+- **Code**: 
+  - Client: [artifacts/code/client.ts](mdc:artifacts/code/client.ts)
+  - Server: [lib/artifacts/code/server.ts](mdc:lib/artifacts/code/server.ts)
+- **Image**: 
+  - Client: [artifacts/image/client.ts](mdc:artifacts/image/client.ts)
+  - Server: [lib/artifacts/image/server.ts](mdc:lib/artifacts/image/server.ts)
+- **Sheet**: 
+  - Client: [artifacts/sheet/client.ts](mdc:artifacts/sheet/client.ts)
+  - Server: [lib/artifacts/sheet/server.ts](mdc:lib/artifacts/sheet/server.ts)
+
+## Artifact Actions
+
+Common artifact actions are defined in:
+- [artifacts/actions.ts](mdc:artifacts/actions.ts)
+
+## Integration with Research System
+
+The artifacts system is used to display research results from the deep research system. The research orchestrator creates artifacts to present comprehensive research findings to the user.
