@@ -60,3 +60,55 @@ pnpm dev
 ```
 
 Your app template should now be running on [localhost:3000](http://localhost:3000).
+
+## Reasoning Token Extraction and Neo4j Integration
+
+This project implements advanced reasoning token extraction and storage capabilities, leveraging the Vercel AI SDK's `extractReasoningMiddleware` to capture model reasoning and store it in a Neo4j knowledge graph.
+
+### How It Works
+
+1. **Middleware Configuration**: The AI model's reasoning is extracted using the `extractReasoningMiddleware` with XML tag processing:
+
+```typescript
+// lib/ai/providers.ts
+'deep-research-mode': wrapLanguageModel({
+  model: xai('grok-3-mini-beta'),
+  middleware: extractReasoningMiddleware({ tagName: 'think' }),
+}),
+```
+
+2. **Reasoning Capture in API Route**: The API route processes these tokens through a specialized lifecycle:
+
+```typescript
+// Extract reasoning from tool responses or deep research results
+const toolResponses = response.toolResponses as ToolResponseWithReasoning[] || [];
+let reasoningText = toolResponses.find(tr => tr?.reasoning)?.reasoning;
+
+// Process tokens through the Neo4j integration tool
+await processReasoningTokens.execute({
+  reasoning: reasoningText,
+  messageId: assistantId,
+  queryContext: userQuery,
+  processInBackground: isWanderMode // Background for Wander mode
+});
+```
+
+3. **Neo4j Knowledge Graph Storage**: Reasoning is processed and stored with structured relationships:
+   - Creates `ReasoningChain` nodes linked to messages
+   - Breaks reasoning into sequential `ReasoningStep` nodes with relationships
+   - Extracts key `Concept` and `Entity` nodes with connections to the chain
+   - Generates `Proposition` nodes for conclusions with supporting evidence
+
+4. **UI Visualization**: The extracted reasoning is displayed in a collapsible component:
+   - Expanded by default for deep research mode
+   - Shows statistics about reasoning steps and duration
+   - Renders with proper markdown formatting
+
+### Use Cases
+
+- **Research Assistant**: Captures AI reasoning for complex research queries
+- **Multi-step Analysis**: Tracks reasoning chains across sequential steps
+- **Knowledge Building**: Builds a cumulative knowledge graph for semantic retrieval
+- **Thought Process Visualization**: Makes AI reasoning transparent to users
+
+This integration enhances the application by storing not just the final outputs, but the entire reasoning process, enabling richer knowledge retrieval and transparency.

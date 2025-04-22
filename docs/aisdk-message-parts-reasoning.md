@@ -1,6 +1,6 @@
-# AI SDK 4.2 Message Parts and Reasoning Tokens
+# AI SDK Message Parts and Reasoning Tokens
 
-This document outlines how to use Message Parts and Reasoning Tokens in AI SDK 4.2 for our Neo4j knowledge graph integration project.
+This document outlines how to use Message Parts and Reasoning Tokens in AI SDK for our Neo4j knowledge graph integration project.
 
 ## Message Parts Overview
 

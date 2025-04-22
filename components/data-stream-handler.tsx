@@ -17,8 +17,11 @@ export type DataStreamDelta = {
     | 'suggestion'
     | 'clear'
     | 'finish'
-    | 'kind';
+    | 'kind'
+    | 'content'
+    | 'artifact';
   content: string | Suggestion;
+  documentId?: string; // For artifact type
 };
 
 export function DataStreamHandler({ id }: { id: string }) {
@@ -32,12 +35,17 @@ export function DataStreamHandler({ id }: { id: string }) {
     const newDeltas = dataStream.slice(lastProcessedIndex.current + 1);
     lastProcessedIndex.current = dataStream.length - 1;
 
-    (newDeltas as DataStreamDelta[]).forEach((delta: DataStreamDelta) => {
+    console.log(`Processing ${newDeltas.length} new data stream deltas`);
+    
+    (newDeltas as DataStreamDelta[]).forEach((delta: DataStreamDelta, index) => {
+      console.log(`Processing delta ${index}:`, delta.type, delta);
+      
       const artifactDefinition = artifactDefinitions.find(
         (artifactDefinition) => artifactDefinition.kind === artifact.kind,
       );
 
       if (artifactDefinition?.onStreamPart) {
+        console.log(`Calling onStreamPart for artifact kind: ${artifact.kind}`);
         artifactDefinition.onStreamPart({
           streamPart: delta,
           setArtifact,
@@ -79,10 +87,30 @@ export function DataStreamHandler({ id }: { id: string }) {
               status: 'streaming',
             };
 
+          case 'content':
+            return {
+              ...draftArtifact,
+              content: delta.content as string,
+              status: 'streaming',
+            };
+
           case 'finish':
             return {
               ...draftArtifact,
               status: 'idle',
+            };
+
+          case 'artifact':
+            console.log("Artifact event received:", delta);
+            // Extract information from the content if available
+            const artifactContent = typeof delta.content === 'object' ? delta.content : {};
+            return {
+              ...draftArtifact,
+              documentId: delta.documentId || (artifactContent as any).id,
+              kind: (artifactContent as any).kind || 'text',
+              title: (artifactContent as any).title || 'Research Report',
+              status: 'idle',
+              isVisible: true,
             };
 
           default:

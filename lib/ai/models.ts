@@ -1,4 +1,4 @@
-export const DEFAULT_CHAT_MODEL: string = 'chat-model';
+export const DEFAULT_CHAT_MODEL: string = 'wander-mode';
 
 interface ChatModel {
   id: string;
@@ -8,13 +8,13 @@ interface ChatModel {
 
 export const chatModels: Array<ChatModel> = [
   {
-    id: 'chat-model',
-    name: 'Chat model',
-    description: 'Primary model for all-purpose chat',
+    id: 'wander-mode',
+    name: 'Wander',
+    description: 'Quick exploration with efficient responses',
   },
   {
-    id: 'chat-model-reasoning',
-    name: 'Reasoning model',
-    description: 'Uses advanced reasoning',
+    id: 'deep-research-mode',
+    name: 'Go Deep',
+    description: 'Comprehensive multi-step research with reasoning',
   },
 ];

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Core Architecture Guidelines
 
-This project integrates Neo4j knowledge graph capabilities with the Vercel AI SDK 4.2 to create a research assistant application with the following key features:
+This project integrates Neo4j knowledge graph capabilities with the Vercel AI SDK to create a research assistant application with the following key features:
 
 1. Neo4j semantic graph database integration for knowledge storage and retrieval
 2. Vector-based semantic search using OpenAI text-embedding-3-large (3072 dimensions)
@@ -27,7 +27,7 @@ This project integrates Neo4j knowledge graph capabilities with the Vercel AI SD
 
 - Next.js 14+
 - React 18+
-- Vercel AI SDK 4.2+
+- Vercel AI SDK+
 - Neo4j graph database (with vector indexes for semantic search)
 - OpenAI embeddings (text-embedding-3-large, 3072 dimensions)
 - Tailwind CSS for styling

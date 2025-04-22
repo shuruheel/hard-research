@@ -15,6 +15,7 @@ import { useArtifactSelector } from '@/hooks/use-artifact';
 import { toast } from 'sonner';
 import { unstable_serialize } from 'swr/infinite';
 import { getChatHistoryPaginationKey } from './sidebar-history';
+import { ResearchProgress } from '@/components/research-progress';
 
 export function Chat({
   id,
@@ -30,6 +31,7 @@ export function Chat({
   isReadonly: boolean;
 }) {
   const { mutate } = useSWRConfig();
+  const [showResearchProgress, setShowResearchProgress] = useState(false);
 
   const {
     messages,
@@ -43,18 +45,38 @@ export function Chat({
     reload,
   } = useChat({
     id,
-    body: { id, selectedChatModel: selectedChatModel },
+    body: { 
+      selectedChatModel: selectedChatModel,
+      chatId: id // Pass the chatId to be used for progress tracking
+    },
     initialMessages,
     experimental_throttle: 100,
     sendExtraMessageFields: true,
     generateId: generateUUID,
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
+      // Hide progress when chat completes
+      setShowResearchProgress(false);
     },
     onError: () => {
       toast.error('An error occurred, please try again!');
+      // Hide progress on error
+      setShowResearchProgress(false);
     },
   });
+
+  // Custom submit handler to show research progress for deep-research-mode
+  const handleSubmitWithProgress = (
+    event?: { preventDefault?: () => void } | undefined, 
+    chatRequestOptions?: any
+  ) => {
+    // Show progress indicator if using the deep research mode
+    if (selectedChatModel === 'deep-research-mode') {
+      setShowResearchProgress(true);
+    }
+    // Call the original handler
+    return handleSubmit(event, chatRequestOptions);
+  };
 
   const { data: votes } = useSWR<Array<Vote>>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
@@ -74,6 +96,13 @@ export function Chat({
           isReadonly={isReadonly}
         />
 
+        {/* Research Progress Component */}
+        {selectedChatModel === 'deep-research-mode' && showResearchProgress && (
+          <div className="px-4 mt-2 w-full max-w-3xl mx-auto">
+            <ResearchProgress chatId={id} isVisible={showResearchProgress} />
+          </div>
+        )}
+
         <Messages
           chatId={id}
           status={status}
@@ -85,13 +114,19 @@ export function Chat({
           isArtifactVisible={isArtifactVisible}
         />
 
-        <form className="flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl">
+        <form 
+          className="flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmitWithProgress();
+          }}
+        >
           {!isReadonly && (
             <MultimodalInput
               chatId={id}
               input={input}
               setInput={setInput}
-              handleSubmit={handleSubmit}
+              handleSubmit={handleSubmitWithProgress}
               status={status}
               stop={stop}
               attachments={attachments}
@@ -108,7 +143,7 @@ export function Chat({
         chatId={id}
         input={input}
         setInput={setInput}
-        handleSubmit={handleSubmit}
+        handleSubmit={handleSubmitWithProgress}
         status={status}
         stop={stop}
         attachments={attachments}

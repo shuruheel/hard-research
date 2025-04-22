@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useActionState, useEffect, useState } from 'react';
+import { useState, useTransition } from 'react';
 
 import { AuthForm } from '@/components/auth-form';
 import { SubmitButton } from '@/components/submit-button';
@@ -14,36 +14,29 @@ export default function Page() {
   const router = useRouter();
 
   const [email, setEmail] = useState('');
-  const [isSuccessful, setIsSuccessful] = useState(false);
-
-  const [state, formAction] = useActionState<RegisterActionState, FormData>(
-    register,
-    {
-      status: 'idle',
-    },
-  );
-
-  useEffect(() => {
-    if (state.status === 'user_exists') {
-      toast({ type: 'error', description: 'Account already exists!' });
-    } else if (state.status === 'failed') {
-      toast({ type: 'error', description: 'Failed to create account!' });
-    } else if (state.status === 'invalid_data') {
-      toast({
-        type: 'error',
-        description: 'Failed validating your submission!',
-      });
-    } else if (state.status === 'success') {
-      toast({ type: 'success', description: 'Account created successfully!' });
-
-      setIsSuccessful(true);
-      router.refresh();
-    }
-  }, [state]);
+  const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (formData: FormData) => {
     setEmail(formData.get('email') as string);
-    formAction(formData);
+
+    startTransition(async () => {
+      const initialRegisterState: RegisterActionState = { status: 'idle' };
+      const result = await register(initialRegisterState, formData);
+
+      if (result.status === 'user_exists') {
+        toast({ type: 'error', description: 'Account already exists!' });
+      } else if (result.status === 'failed') {
+        toast({ type: 'error', description: 'Failed to create account!' });
+      } else if (result.status === 'invalid_data') {
+        toast({
+          type: 'error',
+          description: 'Failed validating your submission!',
+        });
+      } else if (result.status === 'success') {
+        toast({ type: 'success', description: 'Account created successfully!' });
+        router.refresh();
+      }
+    });
   };
 
   return (
@@ -56,7 +49,7 @@ export default function Page() {
           </p>
         </div>
         <AuthForm action={handleSubmit} defaultEmail={email}>
-          <SubmitButton isSuccessful={isSuccessful}>Sign Up</SubmitButton>
+          <SubmitButton isPending={isPending}>Sign Up</SubmitButton>
           <p className="text-center text-sm text-gray-600 mt-4 dark:text-zinc-400">
             {'Already have an account? '}
             <Link
