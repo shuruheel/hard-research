@@ -29,13 +29,13 @@ export async function getEmbeddingForText(
   }
   
   try {
-    // Ensure text is clean and not too long
-    const cleanText = prepareTextForEmbedding(text);
+    // Truncate to stay within embedding model limits
+    const truncatedText = text.substring(0, 8000);
     
     // Get embedding from OpenAI
     const response = await openai.embeddings.create({
       model: "text-embedding-3-large",
-      input: cleanText,
+      input: truncatedText,
       dimensions: dimensions
     });
     

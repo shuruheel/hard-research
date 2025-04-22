@@ -227,7 +227,8 @@ function parseReasoningSteps(reasoning: string): { content: string; index: numbe
   // Simple implementation to split reasoning into steps
   // First try to split by double newlines
   let steps = reasoning.split('\n\n')
-    .filter(step => step.trim().length > 0);
+    .filter(step => step.trim().length > 0)
+    .map((content, index) => ({ content, index }));
   
   // If we have very few steps, try splitting by numbered patterns
   if (steps.length < 3) {
@@ -237,7 +238,7 @@ function parseReasoningSteps(reasoning: string): { content: string; index: numbe
     
     while ((match = numberedStepPattern.exec(reasoning)) !== null) {
       if (match[2] && match[2].trim().length > 0) {
-        numberedSteps.push(match[2].trim());
+        numberedSteps.push({ content: match[2].trim(), index: numberedSteps.length });
       }
     }
     
@@ -246,22 +247,11 @@ function parseReasoningSteps(reasoning: string): { content: string; index: numbe
     }
   }
   
-  // If still few steps, try splitting by single newlines for simple reasoning
-  if (steps.length < 2 && reasoning.includes('\n')) {
-    steps = reasoning.split('\n')
-      .filter(step => step.trim().length > 0);
-  }
-  
-  // If we still have no steps, use the whole reasoning as one step
-  if (steps.length === 0) {
-    steps = [reasoning];
-  }
-  
-  return steps.map((content, index) => ({ content, index }));
+  return steps;
 }
 
 /**
- * Determine the type of a reasoning step
+ * Determine the type of reasoning step based on content and position
  */
 function determineStepType(
   content: string, 
@@ -270,73 +260,58 @@ function determineStepType(
 ): 'premise' | 'inference' | 'evidence' | 'counterargument' | 'conclusion' {
   const lowerContent = content.toLowerCase();
   
-  if (index === 0) {
-    return 'premise';
-  }
+  // First step is usually a premise
+  if (index === 0) return 'premise';
   
-  if (index === totalSteps - 1) {
-    if (lowerContent.includes('conclusion') || 
-        lowerContent.includes('therefore') || 
-        lowerContent.includes('thus') || 
-        lowerContent.includes('in summary') ||
-        lowerContent.includes('to summarize')) {
-      return 'conclusion';
-    }
-  }
+  // Last step is usually a conclusion
+  if (index === totalSteps - 1) return 'conclusion';
   
+  // Detect evidence
   if (lowerContent.includes('evidence') || 
-      lowerContent.includes('data shows') || 
-      lowerContent.includes('according to')) {
+      lowerContent.includes('according to') || 
+      lowerContent.includes('research shows')) {
     return 'evidence';
   }
   
+  // Detect counterarguments
   if (lowerContent.includes('however') || 
       lowerContent.includes('on the other hand') || 
-      lowerContent.includes('counterargument') ||
-      lowerContent.includes('contrary to')) {
+      lowerContent.includes('counter')) {
     return 'counterargument';
   }
   
+  // Default to inference for middle steps
   return 'inference';
 }
 
 /**
- * Extract a conclusion from reasoning
+ * Extract a conclusion from reasoning text
  */
 function extractConclusion(
   reasoning: string, 
   steps: { content: string; index: number }[]
 ): string {
-  // Look for explicit conclusion markers
+  // Check if there are explicit conclusion markers
   const conclusionMarkers = [
-    'conclusion:', 
-    'therefore,', 
-    'thus,', 
-    'in conclusion,', 
-    'to summarize,'
+    "in conclusion", 
+    "to conclude", 
+    "therefore", 
+    "thus", 
+    "in summary", 
+    "overall"
   ];
   
-  const lowerReasoning = reasoning.toLowerCase();
-  
+  // Look for conclusion markers in the text
   for (const marker of conclusionMarkers) {
-    const index = lowerReasoning.indexOf(marker);
-    if (index !== -1) {
-      return reasoning.substring(index).trim();
+    const markerIndex = reasoning.toLowerCase().indexOf(marker);
+    if (markerIndex >= 0) {
+      return reasoning.substring(markerIndex);
     }
   }
   
-  // If no explicit markers, use the last step if it looks like a conclusion
+  // If no explicit markers, use the last step
   if (steps.length > 0) {
-    const lastStep = steps[steps.length - 1];
-    if (determineStepType(lastStep.content, lastStep.index, steps.length) === 'conclusion') {
-      return lastStep.content;
-    }
-  }
-  
-  // Extract the last sentence(s) if we can't find a conclusion otherwise
-  const sentences = reasoning.match(/[^.!?]+[.!?]+/g) || [];
-  if (sentences.length > 0) {
-    return sentences.slice(-2).join(' ').trim();
+    return steps[steps.length - 1].content;
   }
   
   return '';
@@ -350,114 +325,95 @@ async function extractConceptsAndEntities(reasoning: string): Promise<{
   entities: Array<{ name: string; type: string; description?: string }>;
 }> {
   try {
+    // Create a prompt for concept and entity extraction
+    const prompt = `
+    Extract key concepts and entities from this reasoning text:
+    
+    "${reasoning.substring(0, 4000)}"
+    
+    Format your response as valid JSON with 'concepts' and 'entities' arrays:
+    {
+      "concepts": [
+        {"name": "Concept name", "definition": "Brief definition", "domain": "optional domain/field"}
+      ],
+      "entities": [
+        {"name": "Entity name", "type": "person|organization|location|other", "description": "optional description"}
+      ]
+    }
+    
+    Only extract concepts that are explicitly discussed or central to understanding the reasoning.
+    Extract named entities that are specifically mentioned.
+    `;
+    
+    // Call LLM for extraction
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { 
-          role: "system", 
-          content: `Extract key concepts and entities from the given reasoning text.
-          
-          For concepts, provide:
-          - name: The concept name
-          - definition: A clear, concise definition (1-2 sentences)
-          - domain: The knowledge domain this concept belongs to (optional)
-          
-          For entities, provide:
-          - name: The entity name
-          - type: The entity type (Person, Organization, Location, Product, etc.)
-          - description: A brief description of the entity (optional)
-          
-          Return results as valid JSON in this format:
-          {
-            "concepts": [
-              {"name": "...", "definition": "...", "domain": "..."}
-            ],
-            "entities": [
-              {"name": "...", "type": "...", "description": "..."}
-            ]
-          }
-          
-          Focus on the most important concepts and entities (maximum 5 of each).`
-        },
-        { role: "user", content: reasoning }
+        { role: "system", content: "You are a precise entity and concept extraction assistant." },
+        { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" }
     });
     
+    // Parse the response
     const content = response.choices[0].message.content;
     if (!content) {
       return { concepts: [], entities: [] };
     }
     
-    const extracted = JSON.parse(content);
-    
-    // Validate structure
-    if (!extracted.concepts || !Array.isArray(extracted.concepts) ||
-        !extracted.entities || !Array.isArray(extracted.entities)) {
-      console.error("Invalid extraction result structure:", extracted);
-      return { concepts: [], entities: [] };
-    }
+    const extractedData = JSON.parse(content);
     
     return {
-      concepts: extracted.concepts,
-      entities: extracted.entities
+      concepts: Array.isArray(extractedData.concepts) ? extractedData.concepts : [],
+      entities: Array.isArray(extractedData.entities) ? extractedData.entities : []
     };
   } catch (error) {
-    console.error("Failed to extract concepts and entities:", error);
+    console.error("Error extracting concepts and entities:", error);
     return { concepts: [], entities: [] };
   }
 }
 
 /**
- * Create concept nodes and link to reasoning chain
+ * Create concept nodes and connect them to reasoning chain
  */
 async function createConcepts(
   session: Session,
   concepts: Array<{ name: string; definition: string; domain?: string }>,
   chainId: string
 ): Promise<number> {
+  if (!concepts.length) return 0;
+  
   let count = 0;
   
   for (const concept of concepts) {
     try {
-      // Generate embedding for the concept
-      const embedding = await getEmbeddingForText(`${concept.name}: ${concept.definition}`);
+      const conceptId = `concept-${nanoid(10)}`;
       
-      // Create or update concept
       await session.run(`
+        MATCH (r:ReasoningChain {id: $chainId})
         MERGE (c:Concept {name: $name})
         ON CREATE SET 
-          c.id = $id, 
+          c.id = $id,
           c.definition = $definition,
           c.domain = $domain,
-          c.embedding = $embedding,
           c.createdAt = datetime()
-        ON MATCH SET 
-          c.definition = CASE 
-            WHEN c.definition IS NULL OR SIZE(c.definition) < SIZE($definition) 
-            THEN $definition 
-            ELSE c.definition 
-          END,
-          c.embedding = $embedding,
-          c.updatedAt = datetime()
-        
-        WITH c
-        MATCH (r:ReasoningChain {id: $chainId})
-        MERGE (r)-[:HAS_CONCEPT]->(c)
-        
+        ON MATCH SET
+          c.definition = CASE WHEN c.definition IS NULL OR size(c.definition) < size($definition) 
+                         THEN $definition ELSE c.definition END,
+          c.domain = CASE WHEN c.domain IS NULL THEN $domain ELSE c.domain END
+        CREATE (r)-[:REFERENCES]->(c)
         RETURN c
       `, {
-        id: `concept-${nanoid(10)}`,
+        chainId,
+        id: conceptId,
         name: concept.name,
         definition: concept.definition,
-        domain: concept.domain || null,
-        embedding: embedding,
-        chainId
+        domain: concept.domain || null
       });
       
       count++;
     } catch (error) {
-      console.error(`Failed to create concept ${concept.name}:`, error);
+      console.error(`Error creating concept ${concept.name}:`, error);
     }
   }
   
@@ -465,58 +421,46 @@ async function createConcepts(
 }
 
 /**
- * Create entity nodes and link to reasoning chain
+ * Create entity nodes and connect them to reasoning chain
  */
 async function createEntities(
   session: Session,
   entities: Array<{ name: string; type: string; description?: string }>,
   chainId: string
 ): Promise<number> {
+  if (!entities.length) return 0;
+  
   let count = 0;
   
   for (const entity of entities) {
     try {
-      // Handle Person entities differently
-      const nodeLabel = entity.type === 'Person' ? 'Person' : 'Entity';
+      const entityId = `entity-${nanoid(10)}`;
       
-      // Generate embedding for the entity
-      const embedding = await getEmbeddingForText(`${entity.name}: ${entity.description || entity.type}`);
-      
-      // Create or update entity
       await session.run(`
-        MERGE (e:${nodeLabel} {name: $name})
+        MATCH (r:ReasoningChain {id: $chainId})
+        MERGE (e:Entity {name: $name})
         ON CREATE SET 
-          e.id = $id, 
+          e.id = $id,
           e.type = $type,
           e.description = $description,
-          e.embedding = $embedding,
           e.createdAt = datetime()
-        ON MATCH SET 
-          e.description = CASE 
-            WHEN e.description IS NULL OR SIZE(e.description) < SIZE($description) 
-            THEN $description 
-            ELSE e.description 
-          END,
-          e.embedding = $embedding,
-          e.updatedAt = datetime()
-        
-        WITH e
-        MATCH (r:ReasoningChain {id: $chainId})
-        MERGE (r)-[:REFERS_TO]->(e)
-        
+        ON MATCH SET
+          e.type = CASE WHEN e.type IS NULL THEN $type ELSE e.type END,
+          e.description = CASE WHEN e.description IS NULL OR size(e.description) < size($description) 
+                         THEN $description ELSE e.description END
+        CREATE (r)-[:MENTIONS]->(e)
         RETURN e
       `, {
-        id: `${nodeLabel.toLowerCase()}-${nanoid(10)}`,
+        chainId,
+        id: entityId,
         name: entity.name,
         type: entity.type,
-        description: entity.description || null,
-        embedding: embedding,
-        chainId
+        description: entity.description || null
       });
       
       count++;
     } catch (error) {
-      console.error(`Failed to create entity ${entity.name}:`, error);
+      console.error(`Error creating entity ${entity.name}:`, error);
     }
   }
   

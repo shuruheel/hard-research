@@ -340,7 +340,11 @@ export class ResearchOrchestrator {
               content: `Research question: "${subQuery}"\n\nPlease search the web for relevant information on this topic.` 
             }
           ],
-          maxSteps: 3
+          maxSteps: 3,
+          tools: {
+            web_search_preview: aiSdkOpenai.tools.webSearchPreview()
+          },
+          toolChoice: { type: 'tool', toolName: 'web_search_preview' }
         });
         
         // The response includes the generated text

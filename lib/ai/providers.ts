@@ -15,16 +15,19 @@ import {
 export const myProvider = isTestEnvironment
   ? customProvider({
       languageModels: {
-        'chat-model': chatModel,
-        'chat-model-reasoning': reasoningModel,
+        'wander-mode': chatModel,
+        'deep-research-mode': wrapLanguageModel({
+          model: reasoningModel,
+          middleware: extractReasoningMiddleware({ tagName: 'think' }),
+        }),
         'title-model': titleModel,
         'artifact-model': artifactModel,
       },
     })
   : customProvider({
       languageModels: {
-        'chat-model': xai('grok-2-1212'),
-        'chat-model-reasoning': wrapLanguageModel({
+        'wander-mode': xai('grok-2-1212'),
+        'deep-research-mode': wrapLanguageModel({
           model: xai('grok-3-mini-beta'),
           middleware: extractReasoningMiddleware({ tagName: 'think' }),
         }),
