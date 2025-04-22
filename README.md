@@ -25,10 +25,9 @@ A powerful AI research assistant built with Next.js, Neo4j graph database, and a
   - Document creation with research results
   - Responsive design with mobile support
 
-  ## Known Issues
-  - Reasoning token capture and storage in Neo4j hasn't been tested yet (we need to make better use of the OpenAI Responses API and Anthropic thinking tokens)
-  - Support for spreadsheet artifacts based on the Neo4j graph database hasn't been tested yet
-  - 
+## Known Issues
+- Reasoning token capture and storage in Neo4j hasn't been tested yet (we need to make better use of the OpenAI Responses API and Anthropic thinking tokens)
+- Support for spreadsheet artifacts based on the Neo4j graph database hasn't been tested yet
 
 ## System Architecture
 
@@ -61,8 +60,74 @@ Throughout this process, a real-time progress indicator shows the current step a
 
 - Node.js 18+ and npm/pnpm
 - Neo4j database (local or cloud)
+  - Neo4j Desktop (locally) or Neo4j AuraDB (cloud)
+  - Enterprise or Community edition (Enterprise recommended for production)
+  - Neo4j version 5.+ (required for vector search capabilities)
 - OpenAI API key for embeddings and XAI key for generation
 - Vercel account (optional, for deployment)
+
+### Neo4j Graph Schema Setup
+
+The system requires a specific graph schema in Neo4j to function properly. The schema includes node types, relationships, and vector indexes for semantic search.
+
+#### Required Node Types
+
+- **Core Node Types**: Entity, Concept, Person, Proposition, Thought, ReasoningChain, ReasoningStep
+- **Additional Node Types**: Event, Attribute, Emotion, Location, ScientificInsight
+
+#### Vector Indexes
+
+The system requires the following vector indexes for semantic search:
+
+```cypher
+CREATE VECTOR INDEX concept_embeddings IF NOT EXISTS
+FOR (c:Concept) ON (c.embedding)
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 3072,
+  `vector.similarity_function`: 'cosine'
+}};
+
+CREATE VECTOR INDEX entity_embeddings IF NOT EXISTS
+FOR (e:Entity) ON (e.embedding)
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 3072,
+  `vector.similarity_function`: 'cosine'
+}};
+
+CREATE VECTOR INDEX person_embeddings IF NOT EXISTS
+FOR (p:Person) ON (p.embedding)
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 3072,
+  `vector.similarity_function`: 'cosine'
+}};
+
+CREATE VECTOR INDEX proposition_embeddings IF NOT EXISTS
+FOR (p:Proposition) ON (p.embedding)
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 3072,
+  `vector.similarity_function`: 'cosine'
+}};
+
+CREATE VECTOR INDEX reasoningchain_embeddings IF NOT EXISTS
+FOR (r:ReasoningChain) ON (r.embedding)
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 3072,
+  `vector.similarity_function`: 'cosine'
+}};
+
+CREATE VECTOR INDEX thought_embeddings IF NOT EXISTS
+FOR (t:Thought) ON (t.embedding)
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 3072,
+  `vector.similarity_function`: 'cosine'
+}};
+```
+
+> **Note**: The system includes a setup script (`pnpm setup:neo4j`) that will automatically create these indexes and set up the schema.
+
+#### Detailed Schema Documentation
+
+For a complete reference of the Neo4j schema, including all node types, their attributes, and relationship types, see [Graph Schema Documentation](docs/graph-schema.md).
 
 ### Environment Variables
 
