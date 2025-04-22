@@ -1,114 +1,140 @@
-<a href="https://chat.vercel.ai/">
-  <img alt="Next.js 14 and App Router-ready AI chatbot." src="app/(chat)/opengraph-image.png">
-  <h1 align="center">Chat SDK</h1>
-</a>
+# Deep Research System
 
-<p align="center">
-    Chat SDK is a free, open-source template built with Next.js and the AI SDK that helps you quickly build powerful chatbot applications.
-</p>
-
-<p align="center">
-  <a href="https://chat-sdk.dev"><strong>Read Docs</strong></a> ·
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#model-providers"><strong>Model Providers</strong></a> ·
-  <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
-</p>
-<br/>
+A powerful AI research assistant built with Next.js, Neo4j graph database, and advanced AI capabilities that helps you conduct comprehensive research with knowledge graph integration.
 
 ## Features
 
-- [Next.js](https://nextjs.org) App Router
-  - Advanced routing for seamless navigation and performance
-  - React Server Components (RSCs) and Server Actions for server-side rendering and increased performance
-- [AI SDK](https://sdk.vercel.ai/docs)
-  - Unified API for generating text, structured objects, and tool calls with LLMs
-  - Hooks for building dynamic chat and generative user interfaces
-  - Supports xAI (default), OpenAI, Fireworks, and other model providers
-- [shadcn/ui](https://ui.shadcn.com)
-  - Styling with [Tailwind CSS](https://tailwindcss.com)
-  - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
-- Data Persistence
-  - [Neon Serverless Postgres](https://vercel.com/marketplace/neon) for saving chat history and user data
-  - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
-- [Auth.js](https://authjs.dev)
-  - Simple and secure authentication
+- **Dual Research Modes**:
+  - **Wander Mode**: Standard chat interface with graph-enhanced memory
+  - **Deep Research Mode**: Multi-step orchestrated research with web search and knowledge graph integration
+  
+- **Advanced AI Capabilities**:
+  - Reasoning token capture and storage in Neo4j graph database
+  - Message parts for rich, multi-type content display
+  - Multi-step tool calling with maxSteps parameter
+  - Real-time research progress tracking
 
-## Model Providers
+- **Knowledge Graph Integration**:
+  - Neo4j-powered semantic retrieval and storage
+  - Vector embeddings for concept and entity relationships
+  - Extraction of concepts, entities, and propositions from reasoning
+  - Persistent knowledge building across research sessions
 
-This template ships with [xAI](https://x.ai) `grok-2-1212` as the default chat model. However, with the [AI SDK](https://sdk.vercel.ai/docs), you can switch LLM providers to [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://sdk.vercel.ai/providers/ai-sdk-providers) with just a few lines of code.
+- **UI/UX Features**:
+  - Real-time research progress indicator
+  - Collapsible reasoning visualization
+  - Document creation with research results
+  - Responsive design with mobile support
 
-## Deploy Your Own
+## System Architecture
 
-You can deploy your own version of the Next.js AI Chatbot to Vercel with one click:
+The system leverages an orchestrator-worker pattern for research:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fai-chatbot&env=AUTH_SECRET&envDescription=Generate%20a%20random%20secret%20to%20use%20for%20authentication&envLink=https%3A%2F%2Fgenerate-secret.vercel.app%2F32&project-name=my-awesome-chatbot&repository-name=my-awesome-chatbot&demo-title=AI%20Chatbot&demo-description=An%20Open-Source%20AI%20Chatbot%20Template%20Built%20With%20Next.js%20and%20the%20AI%20SDK%20by%20Vercel&demo-url=https%3A%2F%2Fchat.vercel.ai&products=%5B%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22ai%22%2C%22productSlug%22%3A%22grok%22%2C%22integrationSlug%22%3A%22xai%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22protocol%22%3A%22storage%22%2C%22productSlug%22%3A%22neon%22%2C%22integrationSlug%22%3A%22neon%22%7D%2C%7B%22type%22%3A%22blob%22%7D%5D)
+1. **Orchestrator**: Breaks down complex queries into manageable sub-questions
+2. **Knowledge Graph Worker**: Searches the Neo4j database for relevant information
+3. **Web Search Worker**: Retrieves up-to-date information from the web
+4. **Reasoning Processor**: Generates and captures reasoning for each sub-question
+5. **Synthesis Engine**: Combines all findings into a comprehensive research report
 
-## Running locally
+## How It Works
 
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Next.js AI Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
+When in Deep Research mode, the system:
 
-> Note: You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various AI and authentication provider accounts.
+1. Analyzes the research query and breaks it into sub-questions
+2. For each sub-question:
+   - Searches the knowledge graph for relevant concepts and propositions
+   - Performs web searches for up-to-date information
+   - Generates detailed reasoning with citations
+   - Extracts key findings
+3. Synthesizes all results into a comprehensive research report
+4. Saves the research as a document and updates the knowledge graph
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Link local instance with Vercel and GitHub accounts (creates `.vercel` directory): `vercel link`
-3. Download your environment variables: `vercel env pull`
+Throughout this process, a real-time progress indicator shows the current step and status.
+
+## Deployment
+
+### Prerequisites
+
+- Node.js 18+ and npm/pnpm
+- Neo4j database (local or cloud)
+- OpenAI API key for embeddings and XAI key for generation
+- Vercel account (optional, for deployment)
+
+### Environment Variables
+
+Create a `.env` file with the following variables:
+
+```
+# Auth
+AUTH_SECRET=your-auth-secret
+
+# Database
+DATABASE_URL=your-postgresql-url
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+
+# Neo4j
+NEO4J_URI=your-neo4j-uri
+NEO4J_USERNAME=your-neo4j-username
+NEO4J_PASSWORD=your-neo4j-password
+
+# OpenAI
+OPENAI_API_KEY=your-openai-api-key
+XAI_API_KEY=your-xai-api-key
+```
+
+### Installation
 
 ```bash
+# Install dependencies
 pnpm install
+
+# Set up database
+pnpm db:migrate
+
+# Initialize Neo4j schema
+pnpm setup:neo4j
+
+# Start development server
 pnpm dev
 ```
 
-Your app template should now be running on [localhost:3000](http://localhost:3000).
+### Production Deployment
 
-## Reasoning Token Extraction and Neo4j Integration
+```bash
+# Build for production
+pnpm build
 
-This project implements advanced reasoning token extraction and storage capabilities, leveraging the Vercel AI SDK's `extractReasoningMiddleware` to capture model reasoning and store it in a Neo4j knowledge graph.
-
-### How It Works
-
-1. **Middleware Configuration**: The AI model's reasoning is extracted using the `extractReasoningMiddleware` with XML tag processing:
-
-```typescript
-// lib/ai/providers.ts
-'deep-research-mode': wrapLanguageModel({
-  model: xai('grok-3-mini-beta'),
-  middleware: extractReasoningMiddleware({ tagName: 'think' }),
-}),
+# Start production server
+pnpm start
 ```
 
-2. **Reasoning Capture in API Route**: The API route processes these tokens through a specialized lifecycle:
+Or deploy to Vercel:
 
-```typescript
-// Extract reasoning from tool responses or deep research results
-const toolResponses = response.toolResponses as ToolResponseWithReasoning[] || [];
-let reasoningText = toolResponses.find(tr => tr?.reasoning)?.reasoning;
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fyour-username%2Fdeep-research-system)
 
-// Process tokens through the Neo4j integration tool
-await processReasoningTokens.execute({
-  reasoning: reasoningText,
-  messageId: assistantId,
-  queryContext: userQuery,
-  processInBackground: isWanderMode // Background for Wander mode
-});
-```
+## Usage Guide
 
-3. **Neo4j Knowledge Graph Storage**: Reasoning is processed and stored with structured relationships:
-   - Creates `ReasoningChain` nodes linked to messages
-   - Breaks reasoning into sequential `ReasoningStep` nodes with relationships
-   - Extracts key `Concept` and `Entity` nodes with connections to the chain
-   - Generates `Proposition` nodes for conclusions with supporting evidence
+1. Create an account or sign in
+2. Choose a research mode:
+   - **Wander Mode**: For casual exploration and chat
+   - **Deep Research Mode**: For comprehensive research
+3. Enter your research query
+4. Monitor real-time research progress
+5. Review the comprehensive research report
+6. Create documents from research findings
+7. Build a cumulative knowledge graph for future research
 
-4. **UI Visualization**: The extracted reasoning is displayed in a collapsible component:
-   - Expanded by default for deep research mode
-   - Shows statistics about reasoning steps and duration
-   - Renders with proper markdown formatting
+## Architecture and Technical Details
 
-### Use Cases
+The system leverages several advanced technologies:
 
-- **Research Assistant**: Captures AI reasoning for complex research queries
-- **Multi-step Analysis**: Tracks reasoning chains across sequential steps
-- **Knowledge Building**: Builds a cumulative knowledge graph for semantic retrieval
-- **Thought Process Visualization**: Makes AI reasoning transparent to users
+- **Next.js App Router**: Server-side rendering and API routes
+- **Vercel AI SDK**: Streaming, tool calling, and reasoning capture
+- **Neo4j Graph Database**: Knowledge storage and semantic retrieval
+- **OpenAI Embeddings**: Vector similarity search (text-embedding-3-large)
+- **XAI Models**: Advanced language model capabilities
+- **SSE (Server-Sent Events)**: Real-time research progress updates
 
-This integration enhances the application by storing not just the final outputs, but the entire reasoning process, enabling richer knowledge retrieval and transparency.
+## License
+
+[MIT License](LICENSE)
