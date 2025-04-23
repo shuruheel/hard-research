@@ -52,7 +52,7 @@ export class ResearchOrchestrator {
     query,
     userId,
     chatId,
-    maxSteps = 3,
+    maxSteps = 10,
     maxSubQueries = 3,
     standardModel = DEFAULT_STANDARD_MODEL,
     reasoningModel = DEFAULT_REASONING_MODEL,
@@ -340,7 +340,7 @@ export class ResearchOrchestrator {
               content: `Research question: "${subQuery}"\n\nPlease search the web for relevant information on this topic.` 
             }
           ],
-          maxSteps: 3,
+          maxSteps: 10,
           tools: {
             web_search_preview: aiSdkOpenai.tools.webSearchPreview()
           },

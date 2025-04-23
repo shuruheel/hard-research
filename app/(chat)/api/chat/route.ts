@@ -125,7 +125,7 @@ export async function POST(request: Request) {
         const isWanderMode = selectedChatModel === 'wander-mode';
 
         // Configure maximum tool steps based on selected mode
-        const maxSteps = isGoDeepMode ? 3 : 2;
+        const maxSteps = isGoDeepMode ? 10 : 3;
 
         // Extract user's query from message
         let userQuery = "";

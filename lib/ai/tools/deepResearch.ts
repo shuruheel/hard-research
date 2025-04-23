@@ -49,7 +49,7 @@ export const deepResearch = {
     maxSteps: z.number().optional().default(3).describe("Maximum number of steps to perform"),
     chatId: z.string().optional().describe("Chat ID for tracking progress")
   }),
-  execute: async ({ query, maxSteps = 3, chatId }: DeepResearchParams): Promise<DeepResearchResult> => {
+  execute: async ({ query, maxSteps = 10, chatId }: DeepResearchParams): Promise<DeepResearchResult> => {
     try {
       // Initialize collections for all search results
       const allGraphResults: Array<{query: string, results: string}> = [];

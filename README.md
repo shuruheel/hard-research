@@ -9,16 +9,12 @@ A powerful AI research assistant built with Next.js, Neo4j graph database, and a
   - **Deep Research Mode**: Multi-step orchestrated research with web search and knowledge graph integration
   
 - **Advanced AI Capabilities**:
-  - Reasoning token capture and storage in Neo4j graph database
   - Message parts for rich, multi-type content display
   - Multi-step tool calling with maxSteps parameter
   - Real-time research progress tracking
 
 - **Knowledge Graph Integration**:
   - Neo4j-powered semantic retrieval and storage
-  - Vector embeddings for concept and entity relationships
-  - Extraction of concepts, entities, and propositions from reasoning
-  - Persistent knowledge building across research sessions
 
 - **UI/UX Features**:
   - Real-time research progress indicator
@@ -28,6 +24,7 @@ A powerful AI research assistant built with Next.js, Neo4j graph database, and a
 ## Known Issues
 - Reasoning token capture and storage in Neo4j hasn't been tested yet (we need to make better use of the OpenAI Responses API and Anthropic thinking tokens)
 - Support for spreadsheet artifacts based on the Neo4j graph database hasn't been tested yet
+- A couple of minor frontend bugs after report generation
 
 ## System Architecture
 
